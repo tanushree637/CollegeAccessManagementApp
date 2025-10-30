@@ -1,213 +1,186 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  TextInput,
-  ScrollView,
-} from 'react-native';
+import React, { useContext } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import { AuthContext } from '../../context/AuthContext';
 
-const SettingsScreen = () => {
-  const [showProfile, setShowProfile] = useState(false);
-  const [showChangePassword, setShowChangePassword] = useState(false);
-
-  // Profile state
-  const [name, setName] = useState('John Doe');
-  const [email, setEmail] = useState('john@example.com');
-
-  // Password state
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+export default function SettingScreen({ navigation }) {
+  const { user, logout } = useContext(AuthContext);
 
   const handleLogout = () => {
-    setShowProfile(false);
-    setShowChangePassword(false);
-    setName('');
-    setEmail('');
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    console.log('User logged out');
-  };
-
-  const handleProfileSave = () => {
-    setShowProfile(false);
-    console.log('Profile saved:', { name, email });
-  };
-
-  const handleChangePasswordSave = () => {
-    if (newPassword !== confirmPassword)
-      return console.log('Passwords do not match!');
-    setShowChangePassword(false);
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    console.log('Password changed successfully');
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to log out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await logout(); // Clear session from AuthContext
+              // Reset navigation to Login screen
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+              });
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
+          },
+        },
+      ],
+      { cancelable: true },
+    );
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingBottom: 30 }}
-    >
+    <View style={styles.container}>
       <Text style={styles.title}>Settings</Text>
 
-      {/* Buttons */}
-      <TouchableOpacity
-        style={styles.option}
-        onPress={() => setShowProfile(true)}
-      >
-        <Text style={styles.optionText}>Profile</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.option}
-        onPress={() => setShowChangePassword(true)}
-      >
-        <Text style={styles.optionText}>Change Password</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.option} onPress={handleLogout}>
-        <Text style={[styles.optionText, { color: 'red' }]}>Logout</Text>
-      </TouchableOpacity>
-
-      {/* Profile Form */}
-      {showProfile && (
-        <View style={styles.formContainer}>
-          <View style={styles.formHeader}>
-            <Text style={styles.formTitle}>Edit Profile</Text>
-            <TouchableOpacity onPress={() => setShowProfile(false)}>
-              <Text style={styles.closeBtn}>✕</Text>
-            </TouchableOpacity>
+      {/* User Info Section */}
+      <View style={styles.userSection}>
+        <View style={styles.userHeader}>
+          <Ionicons name="person-circle" size={64} color="#1E3A8A" />
+          <View style={styles.userInfo}>
+            <Text style={styles.userName}>
+              {user?.fullName || 'Admin User'}
+            </Text>
+            <Text style={styles.userEmail}>
+              {user?.email || 'admin@college.edu'}
+            </Text>
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleText}>Administrator</Text>
+            </View>
           </View>
-
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-            placeholder="Name"
-          />
-          <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="Email"
-            keyboardType="email-address"
-          />
-          <TouchableOpacity style={styles.saveBtn} onPress={handleProfileSave}>
-            <Text style={styles.saveBtnText}>Save</Text>
-          </TouchableOpacity>
         </View>
-      )}
+      </View>
 
-      {/* Change Password Form */}
-      {showChangePassword && (
-        <View style={styles.formContainer}>
-          <View style={styles.formHeader}>
-            <Text style={styles.formTitle}>Change Password</Text>
-            <TouchableOpacity onPress={() => setShowChangePassword(false)}>
-              <Text style={styles.closeBtn}>✕</Text>
-            </TouchableOpacity>
-          </View>
+      {/* Settings Options */}
+      <View style={styles.settingsSection}>
+        <TouchableOpacity style={styles.optionContainer}>
+          <Ionicons name="key-outline" size={24} color="#6B7280" />
+          <Text style={styles.optionText}>Change Password</Text>
+          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+        </TouchableOpacity>
 
-          <TextInput
-            style={styles.input}
-            value={currentPassword}
-            onChangeText={setCurrentPassword}
-            placeholder="Current Password"
-            secureTextEntry
-          />
-          <TextInput
-            style={styles.input}
-            value={newPassword}
-            onChangeText={setNewPassword}
-            placeholder="New Password"
-            secureTextEntry
-          />
-          <TextInput
-            style={styles.input}
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            placeholder="Confirm Password"
-            secureTextEntry
-          />
-          <TouchableOpacity
-            style={styles.saveBtn}
-            onPress={handleChangePasswordSave}
-          >
-            <Text style={styles.saveBtnText}>Save</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </ScrollView>
+        <TouchableOpacity style={styles.optionContainer}>
+          <Ionicons name="notifications-outline" size={24} color="#6B7280" />
+          <Text style={styles.optionText}>Notification Settings</Text>
+          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.optionContainer}>
+          <Ionicons name="help-circle-outline" size={24} color="#6B7280" />
+          <Text style={styles.optionText}>Help & Support</Text>
+          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Logout Button */}
+      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <Ionicons name="log-out-outline" size={22} color="#fff" />
+        <Text style={styles.logoutText}>Logout</Text>
+      </TouchableOpacity>
+    </View>
   );
-};
-
-export default SettingsScreen;
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#F9FAFB',
     padding: 20,
   },
   title: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#004aad',
-    marginBottom: 20,
+    color: '#1E3A8A',
+    marginBottom: 24,
   },
-  option: {
-    padding: 15,
+  userSection: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  userHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  userInfo: {
+    marginLeft: 16,
+    flex: 1,
+  },
+  userName: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    marginBottom: 4,
+  },
+  userEmail: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  roleBadge: {
+    backgroundColor: '#1E3A8A',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  roleText: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  settingsSection: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginBottom: 24,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  optionContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    borderBottomColor: '#F3F4F6',
   },
   optionText: {
-    fontSize: 18,
-    color: '#333',
+    fontSize: 16,
+    color: '#374151',
+    flex: 1,
+    marginLeft: 12,
   },
-  formContainer: {
-    marginTop: 20,
-    padding: 15,
-    borderWidth: 1,
-    borderColor: '#004aad',
-    borderRadius: 10,
-    backgroundColor: '#f5f6ff',
-  },
-  formHeader: {
+  logoutButton: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15,
+    justifyContent: 'center',
+    backgroundColor: '#EF4444',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    elevation: 3,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
-  formTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#004aad',
-  },
-  closeBtn: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#004aad',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 10,
-  },
-  saveBtn: {
-    backgroundColor: '#004aad',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  saveBtnText: {
+  logoutText: {
     color: '#fff',
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });

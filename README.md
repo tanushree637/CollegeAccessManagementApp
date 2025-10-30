@@ -1,97 +1,203 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# College Access Management System
 
-# Getting Started
+A React Native application for managing college access with role-based authentication for Admin, Teachers, Students, and Guards.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+## 🚀 Features
 
-## Step 1: Start Metro
+- **Role-based Authentication**: Login system for different user types
+- **Admin Panel**: Create users, send notifications, view reports
+- **Teacher Dashboard**: Assign tasks, manage timetables
+- **Student Portal**: View tasks, notifications, and timetables
+- **Guard Interface**: QR code scanning for access control
+- **Firebase Integration**: Backend powered by Firebase Firestore
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+## 📋 Prerequisites
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+- Node.js (v18 or higher)
+- React Native development environment
+- Android Studio (for Android development)
+- Xcode (for iOS development)
+- Firebase account and project
 
-```sh
-# Using npm
-npm start
+## 🛠️ Installation
 
-# OR using Yarn
-yarn start
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/tanushree637/CollegeAccessManagementApp.git
+cd CollegeAccessManagement
 ```
 
-## Step 2: Build and run your app
+### 2. Install dependencies
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+**Frontend (React Native):**
 
-### Android
-
-```sh
-# Using npm
-npm run android
-
-# OR using Yarn
-yarn android
+```bash
+npm install
 ```
 
-### iOS
+**Backend:**
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
+```bash
+cd backend
+npm install
 ```
 
-Then, and every time you update your native dependencies, run:
+### 3. Firebase Setup
 
-```sh
-bundle exec pod install
+1. Create a Firebase project at [https://console.firebase.google.com](https://console.firebase.google.com)
+2. Enable Firestore Database
+3. Download the service account key JSON file
+4. Rename it to `serviceAccountKey.json` and place it in the `backend/` directory
+5. Create a `.env` file in the `backend/` directory:
+
+```env
+PORT=5000
+FIREBASE_PROJECT_ID=your-project-id
+GOOGLE_APPLICATION_CREDENTIALS=./serviceAccountKey.json
 ```
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+### 4. Configure API URL
 
-```sh
-# Using npm
-npm run ios
+Edit `config/config.js` and update the BASE_URL:
 
-# OR using Yarn
-yarn ios
+- For Android Emulator: `http://10.0.2.2:5000`
+- For iOS Simulator: `http://localhost:5000`
+- For Physical Device: `http://YOUR_COMPUTER_IP:5000`
+
+## 🏃‍♂️ Running the Application
+
+### Start the Backend Server
+
+```bash
+cd backend
+npm run dev
 ```
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+### Add Test Users (First Time Setup)
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+```bash
+cd backend
+npm run add-test-users
+```
 
-## Step 3: Modify your app
+### Start the React Native Application
 
-Now that you have successfully run the app, let's make changes!
+```bash
+# In the root directory
+npx react-native start
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+# In another terminal
+npx react-native run-android
+# or
+npx react-native run-ios
+```
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+## 👥 Test Accounts
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+After running the test users script, you can login with:
 
-## Congratulations! :tada:
+- **Admin**: admin@college.com / admin123
+- **Teacher**: teacher@college.com / teacher123
+- **Student**: student@college.com / student123
+- **Guard**: guard@college.com / guard123
 
-You've successfully run and modified your React Native App. :partying_face:
+## 📱 Project Structure
 
-### Now what?
+```
+├── android/              # Android native code
+├── ios/                   # iOS native code
+├── backend/              # Node.js backend
+│   ├── config/           # Firebase configuration
+│   ├── controllers/      # API controllers
+│   ├── routes/           # API routes
+│   ├── models/           # Data models
+│   ├── utils/            # Utility functions
+│   └── scripts/          # Setup scripts
+├── components/           # Reusable React components
+├── screens/              # Screen components
+│   ├── Admin/            # Admin screens
+│   ├── Auth/             # Authentication screens
+│   ├── Teacher/          # Teacher screens
+│   ├── Student/          # Student screens
+│   └── Guard/            # Guard screens
+├── navigation/           # Navigation configuration
+├── context/              # React Context (Auth)
+├── config/               # App configuration
+└── utils/                # Utility functions
+```
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+## 🔧 API Endpoints
 
-# Troubleshooting
+### Authentication
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+- `POST /api/auth/login` - User login
+- `POST /api/auth/register` - Register new user (Admin only)
 
-# Learn More
+### Admin Routes
 
-To learn more about React Native, take a look at the following resources:
+- `GET /api/admin/dashboard` - Admin dashboard data
+- `POST /api/admin/users` - Create new user
+- `GET /api/admin/reports` - View reports
 
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+### Teacher Routes
+
+- `GET /api/teacher/dashboard` - Teacher dashboard
+- `POST /api/teacher/tasks` - Assign tasks
+
+### Student Routes
+
+- `GET /api/student/dashboard` - Student dashboard
+- `GET /api/student/tasks` - View assigned tasks
+
+### Guard Routes
+
+- `GET /api/guard/dashboard` - Guard dashboard
+- `POST /api/guard/scan` - QR code scanning
+
+## 🧹 Recent Fixes
+
+- ✅ Fixed backend entry point (server.js → index.js)
+- ✅ Removed duplicate dependencies
+- ✅ Updated Firebase configuration with .env support
+- ✅ Added proper password validation
+- ✅ Made API URL configurable
+- ✅ Cleaned up build artifacts
+- ✅ Added comprehensive .gitignore
+- ✅ Fixed authentication flow
+- ✅ Added test user setup script
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1. **Login not working**:
+
+   - Make sure backend server is running
+   - Check API URL in `config/config.js`
+   - Verify test users are added to Firebase
+
+2. **Firebase connection issues**:
+
+   - Verify service account key is correctly placed
+   - Check Firebase project settings
+   - Ensure Firestore is enabled
+
+3. **Network errors**:
+   - For physical devices, use your computer's IP address
+   - Check firewall settings
+   - Ensure both devices are on the same network
+
+## 📄 License
+
+This project is licensed under the ISC License.
+
+## 👨‍💻 Developer
+
+**Tanushree Srivastav**
+
+- GitHub: [@tanushree637](https://github.com/tanushree637)
+
+---
+
+For support or questions, please create an issue in the GitHub repository.

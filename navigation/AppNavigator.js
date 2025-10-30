@@ -1,35 +1,39 @@
-import React from 'react';
+// navigation/AppNavigator.js
+import React, { useContext } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useAuth } from '../context/AuthContext';
-import AuthNavigator from './AuthNavigator';
-import AdminTab from './AdminTabs';
-import StudentTab from './StudentTabs';
-import TeacherTab from './TeacherTabs';
-import GuardTab from './GuardTabs';
+import { AuthContext } from '../context/AuthContext';
+
+// Auth Screens
+import LoginScreen from '../screens/Auth/LoginScreen';
+
+// Role-based Navigators
+import AdminNavigator from './AdminNavigator';
+import TeacherNavigator from './TeacherNavigator';
+import StudentNavigator from './StudentNavigator';
+import GuardNavigator from './GuardNavigator';
 
 const Stack = createNativeStackNavigator();
 
-const AppNavigator = () => {
-  const { user } = useAuth();
-
-  if (!user) return <AuthNavigator />;
+export default function AppNavigator() {
+  const { user } = useContext(AuthContext);
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {user.role === 'admin' && (
-        <Stack.Screen name="Admin" component={AdminTab} />
-      )}
-      {user.role === 'teacher' && (
-        <Stack.Screen name="Teacher" component={TeacherTab} />
-      )}
-      {user.role === 'student' && (
-        <Stack.Screen name="Student" component={StudentTab} />
-      )}
-      {user.role === 'guard' && (
-        <Stack.Screen name="Guard" component={GuardTab} />
+      {!user ? (
+        // Not logged in → Show login screen
+        <Stack.Screen name="Login" component={LoginScreen} />
+      ) : user.role === 'admin' ? (
+        <Stack.Screen name="AdminNavigator" component={AdminNavigator} />
+      ) : user.role === 'teacher' ? (
+        <Stack.Screen name="TeacherNavigator" component={TeacherNavigator} />
+      ) : user.role === 'student' ? (
+        <Stack.Screen name="StudentNavigator" component={StudentNavigator} />
+      ) : user.role === 'guard' ? (
+        <Stack.Screen name="GuardNavigator" component={GuardNavigator} />
+      ) : (
+        // fallback in case of unknown role
+        <Stack.Screen name="Login" component={LoginScreen} />
       )}
     </Stack.Navigator>
   );
-};
-
-export default AppNavigator;
+}

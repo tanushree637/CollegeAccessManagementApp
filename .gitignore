@@ -73,3 +73,24 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Service account keys (keep them secure)
+**/serviceAccountKey*.json
+
+# Firebase
+firebase-debug.log
+.firebase/
+
+# IDE files
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
