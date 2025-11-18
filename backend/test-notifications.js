@@ -17,7 +17,7 @@ async function testSendNotifications() {
       console.log('❌ Backend not running on localhost:5000');
       console.log('Trying IP address...');
       try {
-        const ipResponse = await fetch('http://192.168.1.7:5000');
+        const ipResponse = await fetch('http://10.176.117.53:5000');
         if (ipResponse.ok) {
           console.log('✅ Backend is running on IP address');
         } else {

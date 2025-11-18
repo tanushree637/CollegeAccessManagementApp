@@ -15,7 +15,7 @@ export default function TaskListScreen() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const API_URL = 'http://192.168.1.7:5000'; // 🔹 Replace with your backend IP
+  const API_URL = 'http://192.168.1.7:5000';
 
   useEffect(() => {
     if (user) fetchTasks();
@@ -28,7 +28,7 @@ export default function TaskListScreen() {
       setTasks(data || []);
     } catch (error) {
       console.error('Error fetching tasks:', error);
-      Alert.alert('Error', 'Unable to fetch tasks from server.');
+      Alert.alert('Error', 'Unable to fetch tasks.');
     } finally {
       setLoading(false);
     }
@@ -44,9 +44,9 @@ export default function TaskListScreen() {
 
       if (response.ok) {
         Alert.alert('Success', `Task marked as ${newStatus}`);
-        fetchTasks(); // Refresh list
+        fetchTasks();
       } else {
-        Alert.alert('Error', 'Failed to update task status.');
+        Alert.alert('Error', 'Failed to update task.');
       }
     } catch (error) {
       console.error('Error updating task:', error);
@@ -55,11 +55,35 @@ export default function TaskListScreen() {
 
   const renderItem = ({ item }) => (
     <View style={styles.card}>
-      <Text style={styles.title}>{item.title}</Text>
-      <Text style={styles.detail}>Description: {item.description}</Text>
-      <Text style={styles.detail}>Assigned By: {item.assignedBy}</Text>
-      <Text style={styles.detail}>Status: {item.status}</Text>
-      <Text style={styles.detail}>Due: {item.dueDate}</Text>
+      <View style={styles.rowBetween}>
+        <Text style={styles.title}>{item.title}</Text>
+
+        <View
+          style={[
+            styles.statusBadge,
+            {
+              backgroundColor:
+                item.status === 'Completed' ? '#16A34A20' : '#F59E0B20',
+              borderColor: item.status === 'Completed' ? '#16A34A' : '#F59E0B',
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.statusText,
+              {
+                color: item.status === 'Completed' ? '#16A34A' : '#F59E0B',
+              },
+            ]}
+          >
+            {item.status}
+          </Text>
+        </View>
+      </View>
+
+      <Text style={styles.detail}>📄 {item.description}</Text>
+      <Text style={styles.detail}>👤 Assigned By: {item.assignedBy}</Text>
+      <Text style={styles.detail}>⏳ Due: {item.dueDate}</Text>
 
       {item.status !== 'Completed' && (
         <TouchableOpacity
@@ -75,7 +99,7 @@ export default function TaskListScreen() {
   if (loading) {
     return (
       <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#4A90E2" />
+        <ActivityIndicator size="large" color="#1E3A8A" />
         <Text>Loading tasks...</Text>
       </View>
     );
@@ -83,7 +107,8 @@ export default function TaskListScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Your Assigned Tasks 📋</Text>
+      <Text style={styles.header}>My Tasks</Text>
+
       {tasks.length > 0 ? (
         <FlatList
           data={tasks}
@@ -91,7 +116,7 @@ export default function TaskListScreen() {
           renderItem={renderItem}
         />
       ) : (
-        <Text style={styles.emptyText}>No tasks assigned yet.</Text>
+        <Text style={styles.emptyText}>No tasks assigned.</Text>
       )}
     </View>
   );
@@ -100,48 +125,65 @@ export default function TaskListScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFF',
+    backgroundColor: '#F3F4F6',
     padding: 16,
   },
   header: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1A1A1A',
-    marginBottom: 12,
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#1E3A8A',
+    marginBottom: 14,
   },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
-    elevation: 3,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  rowBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   title: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#2E86DE',
+    fontWeight: '700',
+    color: '#111827',
   },
   detail: {
     fontSize: 14,
-    color: '#555',
-    marginVertical: 2,
+    color: '#4B5563',
+    marginTop: 6,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   button: {
-    marginTop: 10,
-    backgroundColor: '#2E86DE',
-    paddingVertical: 8,
-    borderRadius: 8,
+    marginTop: 14,
+    backgroundColor: '#1E3A8A',
+    paddingVertical: 10,
+    borderRadius: 10,
   },
   buttonText: {
     color: '#FFF',
     textAlign: 'center',
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 14,
   },
   emptyText: {
-    fontSize: 16,
-    color: '#777',
     textAlign: 'center',
     marginTop: 20,
+    color: '#6B7280',
+    fontSize: 16,
   },
   loader: {
     flex: 1,

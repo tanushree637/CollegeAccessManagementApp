@@ -14,7 +14,7 @@ export default function TimetableScreen() {
   const [timetable, setTimetable] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const API_URL = 'http://192.168.1.7:5000'; // 🔹 Replace with your local backend IP
+  const API_URL = 'http://192.168.1.7:5000';
 
   useEffect(() => {
     if (user) fetchTimetable();
@@ -32,7 +32,7 @@ export default function TimetableScreen() {
       }
     } catch (error) {
       console.error('Error fetching timetable:', error);
-      Alert.alert('Error', 'Failed to load timetable. Please try again later.');
+      Alert.alert('Error', 'Failed to load timetable.');
     } finally {
       setLoading(false);
     }
@@ -40,13 +40,23 @@ export default function TimetableScreen() {
 
   const renderItem = ({ item }) => (
     <View style={styles.card}>
-      <Text style={styles.day}>{item.day}</Text>
+      {/* Day Title */}
+      <View style={styles.dayHeader}>
+        <Text style={styles.dayText}>{item.day}</Text>
+      </View>
+
+      {/* Class Rows */}
       {item.classes.map((cls, index) => (
-        <View key={index} style={styles.classItem}>
-          <Text style={styles.subject}>{cls.subject}</Text>
-          <Text style={styles.detail}>Time: {cls.time}</Text>
-          <Text style={styles.detail}>Teacher: {cls.teacher}</Text>
-          <Text style={styles.detail}>Room: {cls.room}</Text>
+        <View key={index} style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.subject}>{cls.subject}</Text>
+            <Text style={styles.smallText}>Room: {cls.room}</Text>
+          </View>
+
+          <View style={styles.rightInfo}>
+            <Text style={styles.time}>{cls.time}</Text>
+            <Text style={styles.teacher}>{cls.teacher}</Text>
+          </View>
         </View>
       ))}
     </View>
@@ -55,7 +65,7 @@ export default function TimetableScreen() {
   if (loading) {
     return (
       <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#4A90E2" />
+        <ActivityIndicator size="large" color="#1E3A8A" />
         <Text>Loading your timetable...</Text>
       </View>
     );
@@ -63,7 +73,8 @@ export default function TimetableScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Your Weekly Timetable 📚</Text>
+      <Text style={styles.header}>My Timetable</Text>
+
       {timetable.length > 0 ? (
         <FlatList
           data={timetable}
@@ -80,49 +91,82 @@ export default function TimetableScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFF',
+    backgroundColor: '#F3F4F6',
     padding: 16,
   },
   header: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1A1A1A',
-    marginBottom: 12,
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#1E3A8A',
+    marginBottom: 14,
   },
+
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    elevation: 3,
+    borderRadius: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
   },
-  day: {
+
+  dayHeader: {
+    backgroundColor: '#1E3A8A15',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+
+  dayText: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#2E86DE',
-    marginBottom: 8,
+    fontWeight: '700',
+    color: '#1E3A8A',
   },
-  classItem: {
-    marginBottom: 6,
+
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
+
   subject: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
+    fontWeight: '600',
+    color: '#111827',
   },
-  detail: {
+  time: {
     fontSize: 14,
-    color: '#555',
+    fontWeight: '600',
+    color: '#1E40AF',
+    textAlign: 'right',
   },
+  teacher: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'right',
+  },
+  smallText: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+
+  rightInfo: {
+    alignItems: 'flex-end',
+  },
+
   loader: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+
   emptyText: {
     fontSize: 16,
-    color: '#777',
     textAlign: 'center',
     marginTop: 20,
+    color: '#6B7280',
   },
 });

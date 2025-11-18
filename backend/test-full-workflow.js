@@ -6,7 +6,7 @@ async function testFullWorkflow() {
     // Test 1: Check dashboard before user creation
     console.log('📋 Step 1: Testing Dashboard API');
     const dashboardResponse = await fetch(
-      'http://localhost:5000/api/admin/dashboard',
+      'http://10.176.117.53:5000/api/admin/dashboard',
     );
     console.log('Dashboard Status:', dashboardResponse.status);
 

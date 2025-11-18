@@ -1,3 +1,4 @@
+// screens/Student/StudentDashboardScreen.js
 import React, { useEffect, useState, useContext } from 'react';
 import {
   View,
@@ -7,9 +8,26 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   RefreshControl,
+  Alert,
 } from 'react-native';
-import { AuthContext } from '../../context/AuthContext';
+import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { AuthContext } from '../../context/AuthContext';
+import { API_CONFIG } from '../../config/config';
+
+// small in-memory cache similar to Admin's pattern (keeps dashboard snappy)
+let studentDashboardCache = {
+  data: null,
+  timestamp: null,
+  isValid(maxAge = 30000) {
+    return this.data && this.timestamp && Date.now() - this.timestamp < maxAge;
+  },
+  clear() {
+    this.data = null;
+    this.timestamp = null;
+  },
+};
+global.studentDashboardCache = studentDashboardCache;
 
 export default function StudentDashboardScreen({ navigation }) {
   const { user } = useContext(AuthContext);
@@ -18,43 +36,71 @@ export default function StudentDashboardScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const API_URL = 'http://10.0.2.2:5000'; // Updated for emulator
+  // Use API_CONFIG for base URL and endpoints
+  const BASE = API_CONFIG.BASE_URL;
+  const NOTIF_ENDPOINT = `${BASE}${API_CONFIG.ENDPOINTS.ADMIN}/notifications`;
+  const TASK_ENDPOINT = `${BASE}${API_CONFIG.ENDPOINTS.STUDENT}/tasks`;
 
+  // Fetch on mount and when screen gets focus (like Admin)
   useEffect(() => {
-    if (user) {
-      fetchDashboardData();
+    fetchDashboardData();
+  }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      // Force refresh when coming back to screen
+      if (!loading) {
+        fetchDashboardData(true);
+      }
+    }, [loading]),
+  );
+
+  const fetchDashboardData = async (forceRefresh = false) => {
+    if (!user?.id) {
+      setLoading(false);
+      return;
     }
-  }, [user]);
 
-  const fetchDashboardData = async () => {
     try {
-      // Fetch student notifications using user ID
-      const notifResponse = await fetch(
-        `${API_URL}/api/admin/notifications/${user.id}`,
-      );
-
-      if (notifResponse.ok) {
-        const notifData = await notifResponse.json();
-        setNotifications(notifData.notifications || []);
-      } else {
-        console.log('Failed to fetch notifications:', notifResponse.status);
+      // Use cache unless forced
+      if (!forceRefresh && studentDashboardCache.isValid()) {
+        const cached = studentDashboardCache.data;
+        setTasks(cached.tasks || []);
+        setNotifications(cached.notifications || []);
+        setLoading(false);
+        return;
       }
 
-      // Fetch student tasks (if tasks endpoint exists)
-      try {
-        const taskResponse = await fetch(
-          `${API_URL}/api/student/tasks/${user.id}`,
-        );
-        if (taskResponse.ok) {
-          const taskData = await taskResponse.json();
-          setTasks(taskData.tasks || []);
-        }
-      } catch (taskError) {
-        console.log('Tasks endpoint not available yet:', taskError);
-        setTasks([]); // Set empty array if tasks endpoint doesn't exist
+      setLoading(true);
+
+      // fetch notifications (admin route returns notifications for this user)
+      const notifRes = await fetch(`${NOTIF_ENDPOINT}/${user.id}`);
+      let notifData = [];
+      if (notifRes.ok) {
+        const parsed = await notifRes.json();
+        notifData = parsed.notifications || [];
       }
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+
+      // fetch tasks for student
+      const taskRes = await fetch(`${TASK_ENDPOINT}/${user.id}`);
+      let taskData = [];
+      if (taskRes.ok) {
+        const parsed = await taskRes.json();
+        taskData = parsed.tasks || [];
+      }
+
+      setNotifications(notifData);
+      setTasks(taskData);
+
+      // cache
+      studentDashboardCache.data = {
+        notifications: notifData,
+        tasks: taskData,
+      };
+      studentDashboardCache.timestamp = Date.now();
+    } catch (err) {
+      console.error('Dashboard fetch error:', err);
+      Alert.alert('Error', 'Failed to load dashboard. Check your connection.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -63,33 +109,31 @@ export default function StudentDashboardScreen({ navigation }) {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchDashboardData();
+    // clear local cache to force API fetch
+    studentDashboardCache.clear();
+    fetchDashboardData(true);
   };
 
   const markNotificationAsRead = async notificationId => {
     try {
-      const response = await fetch(
-        `${API_URL}/api/admin/notifications/${notificationId}/read`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-        },
+      // use Admin endpoint to mark read (consistent with backend)
+      const res = await fetch(
+        `${API_CONFIG.BASE_URL}/api/admin/notifications/${notificationId}/read`,
+        { method: 'PATCH', headers: { 'Content-Type': 'application/json' } },
       );
 
-      if (response.ok) {
-        // Update local state
+      if (res.ok) {
         setNotifications(prev =>
-          prev.map(notif =>
-            notif.id === notificationId ? { ...notif, isRead: true } : notif,
-          ),
+          prev.map(n => (n.id === notificationId ? { ...n, isRead: true } : n)),
         );
       }
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
+    } catch (err) {
+      console.error('Mark read error:', err);
     }
   };
 
   const formatDate = dateString => {
+    if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
       month: 'short',
@@ -99,48 +143,104 @@ export default function StudentDashboardScreen({ navigation }) {
     });
   };
 
+  const getStatusColor = status => {
+    switch ((status || '').toLowerCase()) {
+      case 'completed':
+        return '#10B981';
+      case 'in-progress':
+      case 'in progress':
+        return '#F59E0B';
+      case 'pending':
+        return '#EF4444';
+      default:
+        return '#6B7280';
+    }
+  };
+
+  // loading skeleton consistent with Admin
   if (loading) {
     return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#4A90E2" />
-        <Text style={styles.loadingText}>Loading Dashboard...</Text>
-      </View>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>Student Dashboard</Text>
+        </View>
+
+        <View style={styles.cardContainer}>
+          {[1, 2].map(i => (
+            <View key={i} style={styles.statCardSkeleton}>
+              <View style={styles.skeletonIcon} />
+              <View style={{ marginLeft: 12, flex: 1 }}>
+                <View style={styles.skeletonLineLarge} />
+                <View
+                  style={[styles.skeletonLine, { width: '50%', marginTop: 8 }]}
+                />
+              </View>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Recent Notifications</Text>
+          <ActivityIndicator
+            size="small"
+            color="#1E3A8A"
+            style={{ marginTop: 12 }}
+          />
+        </View>
+      </ScrollView>
     );
   }
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const completedCount = tasks.filter(
+    t => (t.status || '').toLowerCase() === 'completed',
+  ).length;
 
   return (
     <ScrollView
       style={styles.container}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={['#1E3A8A']}
+        />
       }
     >
       <View style={styles.header}>
-        <Text style={styles.welcomeText}>
-          Welcome back, {user?.fullName || 'Student'} 👋
+        <Text style={styles.title}>
+          Welcome back, {user?.fullName || 'Student'}
         </Text>
-        <Text style={styles.subText}>Here's what's happening today</Text>
+        <TouchableOpacity
+          style={styles.refreshButton}
+          onPress={() => fetchDashboardData(true)}
+        >
+          <Ionicons name="refresh-outline" size={20} color="#1E3A8A" />
+        </TouchableOpacity>
       </View>
 
-      {/* Quick Stats */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statCard}>
-          <Ionicons name="notifications-outline" size={24} color="#4A90E2" />
-          <Text style={styles.statNumber}>
-            {notifications.filter(n => !n.isRead).length}
-          </Text>
-          <Text style={styles.statLabel}>New Notifications</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Ionicons name="checkmark-done-outline" size={24} color="#10B981" />
-          <Text style={styles.statNumber}>
-            {tasks.filter(t => t.status === 'completed').length}
-          </Text>
-          <Text style={styles.statLabel}>Completed Tasks</Text>
-        </View>
+      {/* Stat cards similar to Admin */}
+      <View style={styles.cardContainer}>
+        <StatCard
+          icon="notifications-outline"
+          label="New Notifications"
+          value={unreadCount}
+          color="#2563EB"
+        />
+        <StatCard
+          icon="checkmark-done-outline"
+          label="Completed Tasks"
+          value={completedCount}
+          color="#059669"
+        />
       </View>
 
-      {/* Notifications Section */}
+      {/* Sections */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recent Notifications</Text>
@@ -159,10 +259,20 @@ export default function StudentDashboardScreen({ navigation }) {
                 styles.notificationCard,
                 !notif.isRead && styles.unreadNotification,
               ]}
-              onPress={() => markNotificationAsRead(notif.id)}
+              onPress={() => {
+                markNotificationAsRead(notif.id);
+                navigation.navigate('Notifications');
+              }}
             >
               <View style={styles.notificationHeader}>
-                <Text style={styles.notificationTitle}>{notif.title}</Text>
+                <Text
+                  style={[
+                    styles.notificationTitle,
+                    !notif.isRead && styles.unreadTitle,
+                  ]}
+                >
+                  {notif.title}
+                </Text>
                 <Text style={styles.notificationDate}>
                   {formatDate(notif.createdAt)}
                 </Text>
@@ -170,25 +280,17 @@ export default function StudentDashboardScreen({ navigation }) {
               <Text style={styles.notificationText} numberOfLines={2}>
                 {notif.message}
               </Text>
-              {!notif.isRead && <View style={styles.unreadDot} />}
             </TouchableOpacity>
           ))
         ) : (
-          <View style={styles.emptyState}>
-            <Ionicons
-              name="notifications-off-outline"
-              size={48}
-              color="#9CA3AF"
-            />
-            <Text style={styles.emptyText}>No notifications yet</Text>
-            <Text style={styles.emptySubText}>
-              You'll see important updates here
-            </Text>
-          </View>
+          <EmptyState
+            icon="notifications-off-outline"
+            title="No notifications yet"
+            subtitle="You'll see important updates here"
+          />
         )}
       </View>
 
-      {/* Tasks Section */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Your Tasks</Text>
@@ -198,8 +300,8 @@ export default function StudentDashboardScreen({ navigation }) {
         </View>
 
         {tasks.length > 0 ? (
-          tasks.slice(0, 3).map((task, index) => (
-            <View key={index} style={styles.taskCard}>
+          tasks.slice(0, 3).map((task, idx) => (
+            <View key={task.id || idx} style={styles.taskCard}>
               <View style={styles.taskHeader}>
                 <Text style={styles.taskTitle}>{task.title}</Text>
                 <View
@@ -208,157 +310,196 @@ export default function StudentDashboardScreen({ navigation }) {
                     { backgroundColor: getStatusColor(task.status) },
                   ]}
                 >
-                  <Text style={styles.statusText}>{task.status}</Text>
+                  <Text style={styles.statusText}>
+                    {task.status || 'Unknown'}
+                  </Text>
                 </View>
               </View>
-              <Text style={styles.taskText}>Due: {task.dueDate}</Text>
+              <Text style={styles.taskText}>Due: {task.dueDate || '—'}</Text>
             </View>
           ))
         ) : (
-          <View style={styles.emptyState}>
-            <Ionicons name="document-outline" size={48} color="#9CA3AF" />
-            <Text style={styles.emptyText}>No tasks assigned yet</Text>
-            <Text style={styles.emptySubText}>
-              Your assignments will appear here
-            </Text>
-          </View>
+          <EmptyState
+            icon="document-outline"
+            title="No tasks assigned yet"
+            subtitle="Your assignments will appear here"
+          />
         )}
+      </View>
+
+      {/* Optional quick links at bottom (Profile / Timetable / Settings) */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <View style={styles.actionsRow}>
+          <ActionCard
+            icon="calendar-outline"
+            label="My Timetable"
+            onPress={() => navigation.navigate('Timetable')}
+          />
+          <ActionCard
+            icon="list-outline"
+            label="My Tasks"
+            onPress={() => navigation.navigate('TaskList')}
+          />
+        </View>
+
+        <View style={styles.actionsRow}>
+          <ActionCard
+            icon="notifications-outline"
+            label="Notifications"
+            onPress={() => navigation.navigate('Notifications')}
+          />
+          <ActionCard
+            icon="settings-outline"
+            label="Settings"
+            onPress={() => navigation.navigate('StudentSettings')}
+          />
+        </View>
       </View>
     </ScrollView>
   );
 }
 
-const getStatusColor = status => {
-  switch (status?.toLowerCase()) {
-    case 'completed':
-      return '#10B981';
-    case 'in-progress':
-      return '#F59E0B';
-    case 'pending':
-      return '#EF4444';
-    default:
-      return '#6B7280';
-  }
-};
+/* small reusable components to keep layout consistent with Admin */
+const StatCard = ({ icon, label, value, color }) => (
+  <View style={styles.statCard}>
+    <Ionicons name={icon} size={28} color={color} />
+    <Text style={styles.statValue}>{value}</Text>
+    <Text style={styles.statLabel}>{label}</Text>
+  </View>
+);
 
+const ActionCard = ({ icon, label, onPress }) => (
+  <TouchableOpacity style={styles.actionCard} onPress={onPress}>
+    <Ionicons name={icon} size={28} color="#1E3A8A" />
+    <Text style={styles.actionLabel}>{label}</Text>
+  </TouchableOpacity>
+);
+
+const EmptyState = ({ icon, title, subtitle }) => (
+  <View style={styles.emptyState}>
+    <Ionicons name={icon} size={48} color="#9CA3AF" />
+    <Text style={styles.emptyTitle}>{title}</Text>
+    <Text style={styles.emptySubText}>{subtitle}</Text>
+  </View>
+);
+
+/* styles aligned with Admin Dashboard styles */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFF',
-  },
-  loader: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFF',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#6B7280',
+    backgroundColor: '#F9FAFB',
   },
   header: {
-    padding: 20,
-    paddingBottom: 10,
-  },
-  welcomeText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1A1A1A',
-    marginBottom: 4,
-  },
-  subText: {
-    fontSize: 16,
-    color: '#6B7280',
-  },
-  statsContainer: {
+    padding: 16,
+    paddingBottom: 8,
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginBottom: 20,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1E3A8A',
+  },
+  refreshButton: {
+    padding: 8,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    elevation: 2,
+  },
+
+  cardContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
     gap: 12,
   },
   statCard: {
-    flex: 1,
-    backgroundColor: '#FFF',
+    width: '48%',
+    backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    elevation: 2,
+    padding: 14,
+    marginBottom: 12,
+    alignItems: 'flex-start',
+    elevation: 3,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
   },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1A1A1A',
+  statCardSkeleton: {
+    width: '48%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    elevation: 3,
+  },
+  skeletonIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#E5E7EB',
+  },
+  skeletonLineLarge: {
+    height: 14,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 6,
+    width: '70%',
+  },
+  skeletonLine: {
+    height: 10,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 6,
+    width: '40%',
+  },
+
+  statValue: {
+    fontSize: 20,
+    fontWeight: '700',
     marginTop: 8,
+    color: '#1E3A8A',
   },
-  statLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  section: {
-    marginBottom: 24,
-    paddingHorizontal: 20,
-  },
+  statLabel: { fontSize: 12, color: '#6B7280', marginTop: 6 },
+
+  section: { marginTop: 8, marginBottom: 20 },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    paddingHorizontal: 16,
+    marginBottom: 8,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#1A1A1A',
-  },
-  seeAllText: {
-    fontSize: 14,
-    color: '#4A90E2',
-    fontWeight: '500',
-  },
+  sectionTitle: { fontSize: 18, fontWeight: '600', color: '#111827' },
+  seeAllText: { color: '#1E3A8A', fontWeight: '600' },
+
   notificationCard: {
-    backgroundColor: '#FFF',
+    backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
+    padding: 14,
     marginBottom: 10,
+    marginHorizontal: 16,
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    position: 'relative',
   },
-  unreadNotification: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#4A90E2',
-  },
+  unreadNotification: { borderLeftWidth: 4, borderLeftColor: '#1E3A8A' },
   notificationHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 8,
   },
   notificationTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1C4E80',
+    color: '#374151',
     flex: 1,
     marginRight: 8,
   },
-  notificationDate: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  notificationText: {
-    fontSize: 14,
-    color: '#374151',
-    lineHeight: 20,
-  },
+  unreadTitle: { color: '#1E3A8A' },
+  notificationDate: { fontSize: 12, color: '#6B7280' },
+  notificationText: { fontSize: 14, color: '#374151', marginTop: 6 },
   unreadDot: {
     position: 'absolute',
     top: 8,
@@ -366,18 +507,16 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#1E3A8A',
   },
+
   taskCard: {
-    backgroundColor: '#FFF',
+    backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
+    padding: 14,
     marginBottom: 10,
+    marginHorizontal: 16,
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
   },
   taskHeader: {
     flexDirection: 'row',
@@ -385,41 +524,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  taskTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2E86DE',
-    flex: 1,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontSize: 12,
-    color: '#FFF',
-    fontWeight: '500',
-    textTransform: 'capitalize',
-  },
-  taskText: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 32,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#6B7280',
-    fontWeight: '500',
+  taskTitle: { fontSize: 16, fontWeight: '600', color: '#1E3A8A', flex: 1 },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  statusText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  taskText: { color: '#6B7280' },
+
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
     marginTop: 12,
   },
-  emptySubText: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    marginTop: 4,
-    textAlign: 'center',
+  actionCard: {
+    width: '48%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    elevation: 2,
   },
+  actionLabel: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '600',
+  },
+
+  emptyState: { alignItems: 'center', paddingVertical: 24 },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: 12,
+  },
+  emptySubText: { fontSize: 14, color: '#9CA3AF', marginTop: 6 },
 });
