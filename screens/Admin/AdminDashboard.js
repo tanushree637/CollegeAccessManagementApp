@@ -15,7 +15,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { API_CONFIG } from '../../config/config';
 import {
   performanceMonitor,
-  fetchWithTimeout,
+  fetchWithRetry,
 } from '../../utils/performanceUtils';
 
 // Simple cache to avoid unnecessary API calls
@@ -86,14 +86,20 @@ export default function AdminDashboard() {
 
       performanceMonitor.startTimer('Dashboard API Call');
 
-      const res = await fetchWithTimeout(
+      const res = await fetchWithRetry(
         `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.ADMIN}/dashboard-with-activity?limit=5`,
         {},
-        8000, // 8 second timeout
+        15000, // 15 second timeout
+        2, // retries
       );
 
+      // Handle non-OK responses explicitly
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
+      }
+
       const data = await res.json();
-      performanceMonitor.endTimer('Dashboard API Call');
 
       if (data.success) {
         setStats(data.stats);
@@ -107,16 +113,16 @@ export default function AdminDashboard() {
         console.warn('Failed to fetch dashboard data:', data.message);
       }
     } catch (error) {
-      performanceMonitor.endTimer('Dashboard API Call');
       console.error('Error fetching dashboard data:', error);
 
       // Show user-friendly error message
-      if (error.message.includes('timeout')) {
+      if (error.message && error.message.includes('timeout')) {
         console.warn(
           '⚠️  Dashboard loading timed out. Please check your internet connection.',
         );
       }
     } finally {
+      performanceMonitor.endTimer('Dashboard API Call');
       setLoading(false);
     }
   };

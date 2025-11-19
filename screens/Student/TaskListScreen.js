@@ -88,7 +88,7 @@ export default function TaskListScreen() {
       {item.status !== 'Completed' && (
         <TouchableOpacity
           style={styles.button}
-          onPress={() => updateTaskStatus(item._id, 'Completed')}
+          onPress={() => updateTaskStatus(item._id || item.id, 'Completed')}
         >
           <Text style={styles.buttonText}>Mark as Completed</Text>
         </TouchableOpacity>
@@ -112,7 +112,9 @@ export default function TaskListScreen() {
       {tasks.length > 0 ? (
         <FlatList
           data={tasks}
-          keyExtractor={item => item._id}
+          keyExtractor={(item, index) =>
+            (item._id || item.id || index).toString()
+          }
           renderItem={renderItem}
         />
       ) : (

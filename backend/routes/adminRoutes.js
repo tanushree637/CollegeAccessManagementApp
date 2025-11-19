@@ -10,6 +10,7 @@ const {
   sendNotification,
   getUserNotifications,
   markNotificationAsRead,
+  generateQRToken,
   testEmail,
 } = require('../controllers/adminController');
 
@@ -20,6 +21,7 @@ router.get('/users', getAllUsers);
 router.get('/recent-attendance', getRecentAttendance);
 router.post('/create-user', createUser);
 router.post('/record-attendance', recordAttendance);
+router.post('/generate-qr', generateQRToken);
 
 // Notification routes
 router.post('/send-notification', sendNotification);

@@ -15,6 +15,18 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
+// Lightweight request logger
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const ms = Date.now() - start;
+    console.log(
+      `${req.method} ${req.originalUrl} -> ${res.statusCode} in ${ms}ms`,
+    );
+  });
+  next();
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
@@ -27,6 +39,19 @@ app.get('/', (req, res) => {
   res.send('College Access Management Backend is running ✅');
 });
 
+// Centralized error handler (fallback)
+// Note: Controllers already handle most errors; this is a safety net.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error('Unhandled server error:', err && err.stack ? err.stack : err);
+  if (!res.headersSent) {
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
 // Start the server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const HOST = process.env.HOST || '0.0.0.0'; // Bind to all interfaces
+app.listen(PORT, HOST, () =>
+  console.log(`Server running on http://${HOST}:${PORT}`),
+);

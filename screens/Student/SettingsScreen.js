@@ -152,7 +152,12 @@ This app helps students manage class schedules, track attendance, and receive up
 
           <TouchableOpacity
             style={styles.editButton}
-            onPress={() => navigation.navigate('EditProfile')}
+            onPress={() => {
+              Alert.alert(
+                'Edit Profile',
+                'Profile editing feature coming soon!',
+              );
+            }}
           >
             <Ionicons name="create-outline" size={20} color="#4A90E2" />
           </TouchableOpacity>

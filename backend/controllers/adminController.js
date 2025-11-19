@@ -89,6 +89,40 @@ exports.getDashboardData = async (req, res) => {
   }
 };
 
+// 🔹 Generate signed QR token for attendance (entry/exit)
+exports.generateQRToken = async (req, res) => {
+  try {
+    const { userId, role, type } = req.body; // type: 'entry' or 'exit'
+
+    if (!userId || !role || !type) {
+      return res.status(400).json({
+        success: false,
+        message: 'userId, role and type are required',
+      });
+    }
+
+    // create payload with short expiry (e.g., 5 minutes)
+    const now = Date.now();
+    const payload = {
+      userId,
+      role,
+      type,
+      iat: now,
+      exp: now + 1000 * 60 * 5,
+    };
+
+    const { signPayload } = require('../utils/qrToken');
+    const token = signPayload(payload);
+
+    return res.status(200).json({ success: true, token });
+  } catch (error) {
+    console.error('Generate QR Token Error:', error);
+    return res
+      .status(500)
+      .json({ success: false, message: 'Failed to generate QR token' });
+  }
+};
+
 // 🔹 Combined Dashboard and Recent Activity (Single API call)
 exports.getDashboardWithActivity = async (req, res) => {
   try {
@@ -228,9 +262,33 @@ exports.getAllUsers = async (req, res) => {
 // 🔹 Record attendance (entry/exit)
 exports.recordAttendance = async (req, res) => {
   try {
-    const { userId, type, location } = req.body; // type: 'entry' or 'exit'
+    const { userId, type, location, token } = req.body; // token is signed QR token
 
-    if (!userId || !type) {
+    let finalUserId = userId;
+    let finalType = type;
+
+    // If token is provided, verify and extract userId and type
+    if (token) {
+      const { verifyToken } = require('../utils/qrToken');
+      const payload = verifyToken(token);
+      if (!payload) {
+        return res
+          .status(400)
+          .json({ success: false, message: 'Invalid or expired token' });
+      }
+
+      // check expiry
+      if (payload.exp && Date.now() > payload.exp) {
+        return res
+          .status(400)
+          .json({ success: false, message: 'Token expired' });
+      }
+
+      finalUserId = payload.userId;
+      finalType = payload.type;
+    }
+
+    if (!finalUserId || !finalType) {
       return res.status(400).json({
         success: false,
         message: 'User ID and type are required',
@@ -244,8 +302,8 @@ exports.recordAttendance = async (req, res) => {
 
     // Create attendance record
     const attendanceRecord = {
-      userId,
-      type, // 'entry' or 'exit'
+      userId: finalUserId,
+      type: finalType, // 'entry' or 'exit'
       date: dateString,
       timestamp,
       location: location || 'Main Gate',
@@ -616,18 +674,39 @@ exports.getUserNotifications = async (req, res) => {
       });
     }
 
-    // Get user notifications ordered by creation date
-    const notificationsSnapshot = await db
-      .collection('userNotifications')
-      .where('userId', '==', userId)
-      .orderBy('createdAt', 'desc')
-      .limit(limit)
-      .get();
+    let notificationsSnapshot;
+    try {
+      // Prefer ordered query (requires composite index in Firestore)
+      notificationsSnapshot = await db
+        .collection('userNotifications')
+        .where('userId', '==', userId)
+        .orderBy('createdAt', 'desc')
+        .limit(limit)
+        .get();
+    } catch (indexedQueryErr) {
+      // Fallback when composite index is missing; fetch and sort in memory
+      console.warn(
+        'Firestore index missing for userNotifications, falling back to un-ordered query:',
+        indexedQueryErr.message,
+      );
+      notificationsSnapshot = await db
+        .collection('userNotifications')
+        .where('userId', '==', userId)
+        .limit(limit)
+        .get();
+    }
 
-    const notifications = notificationsSnapshot.docs.map(doc => ({
+    let notifications = notificationsSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
     }));
+
+    // Ensure results are sorted by createdAt desc for consistent UX
+    notifications.sort((a, b) => {
+      const aTime = new Date(a.createdAt || 0).getTime();
+      const bTime = new Date(b.createdAt || 0).getTime();
+      return bTime - aTime;
+    });
 
     res.status(200).json({
       success: true,

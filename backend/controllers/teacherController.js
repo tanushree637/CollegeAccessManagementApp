@@ -1,29 +1,56 @@
 // controllers/teacherController.js
+const taskModel = require('../models/taskModel');
 const { db } = require('../config/firebaseConfig');
 
-// 🔹 Get all tasks assigned by a teacher
+// 🔹 CREATE TASK
+exports.addTask = async (req, res) => {
+  try {
+    const { title, description, className, assignedTo, teacherId } = req.body;
+
+    if (!title || !description || !className) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    const newTask = {
+      title,
+      description,
+      className,
+      assignedTo: assignedTo || null,
+      teacherId: teacherId || null,
+      createdAt: new Date().toISOString(),
+    };
+
+    const task = await taskModel.createTask(newTask);
+
+    res.status(200).json({
+      message: 'Task assigned successfully',
+      task,
+    });
+  } catch (err) {
+    console.log('Add Task Error:', err);
+    res
+      .status(500)
+      .json({ message: 'Failed to assign task', error: err.message });
+  }
+};
+
+// 🔹 GET ALL TASKS
 exports.getAllTasks = async (req, res) => {
   try {
-    const tasksSnapshot = await db.collection('tasks').get();
-
-    const tasks = tasksSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const tasks = await taskModel.getAllTasks();
 
     res.status(200).json({
       message: 'Tasks fetched successfully',
       tasks,
     });
-  } catch (error) {
-    console.error('Get Tasks Error:', error);
+  } catch (err) {
     res
       .status(500)
-      .json({ message: 'Failed to fetch tasks', error: error.message });
+      .json({ message: 'Failed to fetch tasks', error: err.message });
   }
 };
 
-// 🔹 Get all students assigned to the teacher
+// 🔹 GET ALL STUDENTS
 exports.getAssignedStudents = async (req, res) => {
   try {
     const studentsSnapshot = await db
@@ -40,10 +67,10 @@ exports.getAssignedStudents = async (req, res) => {
       message: 'Students fetched successfully',
       students,
     });
-  } catch (error) {
-    console.error('Get Students Error:', error);
-    res
-      .status(500)
-      .json({ message: 'Failed to fetch students', error: error.message });
+  } catch (err) {
+    res.status(500).json({
+      message: 'Failed to fetch students',
+      error: err.message,
+    });
   }
 };

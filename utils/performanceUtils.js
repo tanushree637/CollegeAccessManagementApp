@@ -52,6 +52,34 @@ export const fetchWithTimeout = async (url, options = {}, timeout = 10000) => {
   }
 };
 
+// Fetch with simple retry and exponential backoff
+export const fetchWithRetry = async (
+  url,
+  options = {},
+  timeout = 10000,
+  retries = 2,
+  backoff = 500,
+) => {
+  let attempt = 0;
+  while (true) {
+    try {
+      attempt += 1;
+      return await fetchWithTimeout(url, options, timeout);
+    } catch (err) {
+      if (attempt > retries) {
+        throw err;
+      }
+      const delay = backoff * Math.pow(2, attempt - 1);
+      console.warn(
+        `Fetch failed (attempt ${attempt}) - retrying in ${delay}ms:`,
+        err.message || err,
+      );
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+};
+
 // Simple debounce function for search/input
 export const debounce = (func, wait) => {
   let timeout;

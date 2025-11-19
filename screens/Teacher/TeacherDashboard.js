@@ -10,8 +10,11 @@ import {
   RefreshControl,
 } from 'react-native';
 import { AuthContext } from '../../context/AuthContext';
+import { API_CONFIG } from '../../config/config';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import QRCode from 'react-native-qrcode-svg';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getBaseUrlFast, fetchWithTimeout } from '../../utils/network';
 
 export default function TeacherDashboard({ navigation }) {
   const { user } = useContext(AuthContext);
@@ -20,45 +23,175 @@ export default function TeacherDashboard({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [qrValue, setQrValue] = useState('');
+  const [qrEntryToken, setQrEntryToken] = useState('');
+  const [qrExitToken, setQrExitToken] = useState('');
 
-  const API_URL = 'http://10.0.2.2:5000'; // Updated for emulator
+  const API_URL = API_CONFIG.BASE_URL;
+  const STORAGE_KEYS = {
+    notifications: uid => `teacher:notifications:${uid}`,
+    tasks: uid => `teacher:tasks:${uid}`,
+  };
 
   useEffect(() => {
     if (user) {
+      // 1) Show cached data instantly if available
+      loadCachedData(user.id).finally(() => {
+        // If we had anything cached, stop showing the full-screen loader
+        setLoading(false);
+      });
+
+      // 2) Refresh live data and QR tokens in parallel (no blocking UI)
       fetchDashboard();
+      Promise.allSettled([
+        generateQrToken('entry'),
+        generateQrToken('exit'),
+      ]).catch(() => {});
+
+      // 3) Dev-only connectivity test to avoid production slowdown
+      if (__DEV__) testNetworkConnectivity();
     }
   }, [user]);
 
-  const fetchDashboard = async () => {
+  const testNetworkConnectivity = async () => {
     try {
-      // Fetch teacher notifications using user ID
-      const notifResponse = await fetch(
-        `${API_URL}/api/admin/notifications/${user.id}`,
+      console.log('Testing network connectivity...');
+      const base = await getBaseUrlFast();
+      const response = await fetch(`${base}/api/admin/users`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      console.log('Network test - Status:', response.status);
+      if (response.ok) {
+        console.log('Network connectivity: OK');
+      } else {
+        console.log(
+          'Network connectivity: Failed with status',
+          response.status,
+        );
+      }
+    } catch (error) {
+      console.error('Network connectivity test failed:', error);
+    }
+  };
+
+  // fetchWithTimeout imported from utils/network
+
+  const loadCachedData = async uid => {
+    try {
+      const [cachedNotifStr, cachedTasksStr] = await Promise.all([
+        AsyncStorage.getItem(STORAGE_KEYS.notifications(uid)),
+        AsyncStorage.getItem(STORAGE_KEYS.tasks(uid)),
+      ]);
+      if (cachedNotifStr) {
+        const parsed = JSON.parse(cachedNotifStr);
+        if (Array.isArray(parsed)) setNotifications(parsed);
+      }
+      if (cachedTasksStr) {
+        const parsed = JSON.parse(cachedTasksStr);
+        if (Array.isArray(parsed)) setTasks(parsed);
+      }
+    } catch (e) {
+      console.log('Failed to load cached dashboard data', e);
+    }
+  };
+
+  const generateQrToken = async type => {
+    try {
+      console.log('Generating QR token for:', {
+        userId: user?.id,
+        role: user?.role,
+        type,
+      });
+      // Log target base for debugging
+      const baseForLog = await getBaseUrlFast();
+      console.log(
+        'API URL:',
+        `${baseForLog}${API_CONFIG.ENDPOINTS.ADMIN}/generate-qr`,
       );
 
-      if (notifResponse.ok) {
-        const notifData = await notifResponse.json();
-        setNotifications(notifData.notifications || []);
-      } else {
-        console.log('Failed to fetch notifications:', notifResponse.status);
+      if (!user?.id || !user?.role) {
+        console.error('Missing user data:', {
+          userId: user?.id,
+          role: user?.role,
+        });
+        return;
       }
 
-      // Generate QR code for teacher
-      const teacherQR = `teacher:${user.id}:${Date.now()}`;
-      setQrValue(teacherQR);
+      const base = await getBaseUrlFast();
+      const res = await fetch(
+        `${base}${API_CONFIG.ENDPOINTS.ADMIN}/generate-qr`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id, role: user.role, type }),
+        },
+      );
 
-      // Fetch teacher tasks (if tasks endpoint exists)
-      try {
-        const taskResponse = await fetch(
-          `${API_URL}/api/teacher/tasks/${user.id}`,
-        );
-        if (taskResponse.ok) {
-          const taskData = await taskResponse.json();
-          setTasks(taskData.tasks || []);
-        }
-      } catch (taskError) {
-        console.log('Tasks endpoint not available yet:', taskError);
-        setTasks([]); // Set empty array if tasks endpoint doesn't exist
+      console.log('Response status:', res.status);
+      const data = await res.json();
+      console.log('Response data:', data);
+
+      if (res.ok && data.token) {
+        if (type === 'entry') setQrEntryToken(data.token);
+        else setQrExitToken(data.token);
+        console.log(`${type} QR token generated successfully`);
+      } else {
+        console.warn('Failed to get QR token', data);
+      }
+    } catch (err) {
+      console.error('Error generating QR token:', err);
+      console.error('Error details:', {
+        message: err.message,
+        stack: err.stack,
+        name: err.name,
+      });
+    }
+  };
+
+  const fetchDashboard = async () => {
+    try {
+      // Generate QR seed (not network) just once per refresh
+      setQrValue(`teacher:${user.id}:${Date.now()}`);
+
+      const base = await getBaseUrlFast();
+      const notifUrl = `${base}${API_CONFIG.ENDPOINTS.ADMIN}/notifications/${user.id}`;
+      const tasksUrl = `${base}${API_CONFIG.ENDPOINTS.TEACHER}/tasks/${user.id}`;
+
+      const [notifRes, tasksRes] = await Promise.allSettled([
+        fetchWithTimeout(notifUrl, {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+        fetchWithTimeout(tasksUrl, {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ]);
+
+      if (notifRes.status === 'fulfilled' && notifRes.value.ok) {
+        const notifData = await notifRes.value.json();
+        const items = Array.isArray(notifData?.notifications)
+          ? notifData.notifications
+          : [];
+        setNotifications(items);
+        AsyncStorage.setItem(
+          STORAGE_KEYS.notifications(user.id),
+          JSON.stringify(items),
+        ).catch(() => {});
+      } else if (notifRes.status === 'fulfilled') {
+        console.log('Failed to fetch notifications:', notifRes.value.status);
+      }
+
+      if (tasksRes.status === 'fulfilled' && tasksRes.value.ok) {
+        const taskData = await tasksRes.value.json();
+        const items = Array.isArray(taskData?.tasks) ? taskData.tasks : [];
+        setTasks(items);
+        AsyncStorage.setItem(
+          STORAGE_KEYS.tasks(user.id),
+          JSON.stringify(items),
+        ).catch(() => {});
+      } else if (tasksRes.status === 'fulfilled') {
+        console.log('Failed to fetch tasks:', tasksRes.value.status);
+      } else if (tasksRes.status === 'rejected') {
+        console.log('Tasks endpoint not available yet:', tasksRes.reason);
       }
     } catch (err) {
       console.log('Error loading teacher dashboard:', err);
@@ -75,8 +208,9 @@ export default function TeacherDashboard({ navigation }) {
 
   const markNotificationAsRead = async notificationId => {
     try {
+      const base = await getBaseUrlFast();
       const response = await fetch(
-        `${API_URL}/api/admin/notifications/${notificationId}/read`,
+        `${base}${API_CONFIG.ENDPOINTS.ADMIN}/notifications/${notificationId}/read`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -125,7 +259,7 @@ export default function TeacherDashboard({ navigation }) {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.welcomeText}>
-          Welcome, {user?.fullName || 'Teacher'} 👨‍🏫
+          Welcome, {user?.name || 'Teacher'} 👨‍🏫
         </Text>
         <Text style={styles.subText}>Manage your classes and stay updated</Text>
       </View>
@@ -146,19 +280,31 @@ export default function TeacherDashboard({ navigation }) {
         </View>
       </View>
 
-      {/* QR Code Section */}
+      {/* QR Code Section (Entry / Exit) */}
       <View style={styles.qrSection}>
-        <Text style={styles.sectionTitle}>Your QR Code</Text>
-        <View style={styles.qrContainer}>
-          {qrValue ? (
-            <QRCode value={qrValue} size={130} />
-          ) : (
-            <Text style={styles.noQrText}>Generating QR code...</Text>
-          )}
-          <Text style={styles.qrDescription}>
-            Students can scan this QR code for attendance
-          </Text>
+        <Text style={styles.sectionTitle}>Your QR Codes</Text>
+        <View style={styles.qrContainerRow}>
+          <View style={styles.qrBlock}>
+            <Text style={styles.qrLabel}>Entry</Text>
+            {qrEntryToken ? (
+              <QRCode value={qrEntryToken} size={120} />
+            ) : (
+              <Text style={styles.noQrText}>Generating...</Text>
+            )}
+          </View>
+
+          <View style={styles.qrBlock}>
+            <Text style={styles.qrLabel}>Exit</Text>
+            {qrExitToken ? (
+              <QRCode value={qrExitToken} size={120} />
+            ) : (
+              <Text style={styles.noQrText}>Generating...</Text>
+            )}
+          </View>
         </View>
+        <Text style={styles.qrDescription}>
+          Students can scan these QR codes to record entry or exit.
+        </Text>
       </View>
 
       {/* Notifications Section */}
@@ -280,7 +426,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 20,
     marginBottom: 20,
-    gap: 12,
+    justifyContent: 'space-between',
   },
   statCard: {
     flex: 1,
@@ -330,6 +476,20 @@ const styles = StyleSheet.create({
     marginTop: 12,
     lineHeight: 20,
   },
+  qrContainerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+  },
+  qrBlock: {
+    alignItems: 'center',
+    width: '45%',
+    backgroundColor: '#FFF',
+    padding: 12,
+    borderRadius: 10,
+    elevation: 2,
+  },
+  qrLabel: { fontSize: 16, fontWeight: '600', marginBottom: 8 },
   noQrText: {
     fontSize: 16,
     color: '#9CA3AF',

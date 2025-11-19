@@ -5,18 +5,26 @@ buildscript {
         compileSdkVersion = 36
         targetSdkVersion = 36
         ndkVersion = "27.1.12297006"
-        kotlinVersion = "2.1.20"
+        // Use a well-supported Kotlin plugin version
+        kotlinVersion = "1.8.22"
+        // Explicit Android Gradle Plugin version — change if you intentionally use a different Gradle wrapper
+        gradlePluginVersion = "8.5.1"
     }
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle")
-        classpath("com.facebook.react:react-native-gradle-plugin")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+        // Android Gradle plugin (explicit version)
+        classpath("com.android.tools.build:gradle:${gradlePluginVersion}")
 
-        // ✅ Add this line for Firebase
+        // React Native Gradle plugin (keeps it unversioned so the plugin can resolve from node_modules)
+        classpath("com.facebook.react:react-native-gradle-plugin")
+
+        // Kotlin Gradle plugin (use the kotlinVersion from ext)
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${kotlinVersion}")
+
+        // Firebase Gradle plugin (keep as-is)
         classpath("com.google.gms:google-services:4.4.4")
     }
 }

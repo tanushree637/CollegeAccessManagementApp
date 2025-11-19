@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import QRCode from 'react-native-qrcode-svg';
 import { AuthContext } from '../../context/AuthContext';
 import { API_CONFIG } from '../../config/config';
 
@@ -35,6 +36,8 @@ export default function StudentDashboardScreen({ navigation }) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [qrEntryToken, setQrEntryToken] = useState('');
+  const [qrExitToken, setQrExitToken] = useState('');
 
   // Use API_CONFIG for base URL and endpoints
   const BASE = API_CONFIG.BASE_URL;
@@ -44,6 +47,11 @@ export default function StudentDashboardScreen({ navigation }) {
   // Fetch on mount and when screen gets focus (like Admin)
   useEffect(() => {
     fetchDashboardData();
+    // generate QR tokens for student (entry + exit)
+    if (user) {
+      generateQrToken('entry').catch(e => console.log(e));
+      generateQrToken('exit').catch(e => console.log(e));
+    }
   }, []);
 
   useFocusEffect(
@@ -104,6 +112,26 @@ export default function StudentDashboardScreen({ navigation }) {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const generateQrToken = async type => {
+    try {
+      const res = await fetch(
+        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.ADMIN}/generate-qr`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user?.id, role: user?.role, type }),
+        },
+      );
+      const data = await res.json();
+      if (res.ok && data.token) {
+        if (type === 'entry') setQrEntryToken(data.token);
+        else setQrExitToken(data.token);
+      }
+    } catch (err) {
+      console.error('Student QR token error:', err);
     }
   };
 
@@ -214,7 +242,7 @@ export default function StudentDashboardScreen({ navigation }) {
     >
       <View style={styles.header}>
         <Text style={styles.title}>
-          Welcome back, {user?.fullName || 'Student'}
+          Welcome back, {user?.name || 'Student'}
         </Text>
         <TouchableOpacity
           style={styles.refreshButton}
@@ -222,6 +250,48 @@ export default function StudentDashboardScreen({ navigation }) {
         >
           <Ionicons name="refresh-outline" size={20} color="#1E3A8A" />
         </TouchableOpacity>
+      </View>
+
+      {/* QR codes for student entry/exit */}
+      <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+        <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
+          Your QR Codes
+        </Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <View
+            style={{
+              width: '48%',
+              alignItems: 'center',
+              padding: 8,
+              backgroundColor: '#fff',
+              borderRadius: 10,
+            }}
+          >
+            <Text style={{ fontWeight: '600', marginBottom: 8 }}>Entry</Text>
+            {qrEntryToken ? (
+              <QRCode value={qrEntryToken} size={110} />
+            ) : (
+              <Text style={{ color: '#9CA3AF' }}>Generating...</Text>
+            )}
+          </View>
+
+          <View
+            style={{
+              width: '48%',
+              alignItems: 'center',
+              padding: 8,
+              backgroundColor: '#fff',
+              borderRadius: 10,
+            }}
+          >
+            <Text style={{ fontWeight: '600', marginBottom: 8 }}>Exit</Text>
+            {qrExitToken ? (
+              <QRCode value={qrExitToken} size={110} />
+            ) : (
+              <Text style={{ color: '#9CA3AF' }}>Generating...</Text>
+            )}
+          </View>
+        </View>
       </View>
 
       {/* Stat cards similar to Admin */}
@@ -294,7 +364,7 @@ export default function StudentDashboardScreen({ navigation }) {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Your Tasks</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('TaskList')}>
+          <TouchableOpacity onPress={() => navigation.navigate('Tasks')}>
             <Text style={styles.seeAllText}>See All</Text>
           </TouchableOpacity>
         </View>
@@ -339,7 +409,7 @@ export default function StudentDashboardScreen({ navigation }) {
           <ActionCard
             icon="list-outline"
             label="My Tasks"
-            onPress={() => navigation.navigate('TaskList')}
+            onPress={() => navigation.navigate('Tasks')}
           />
         </View>
 
@@ -352,7 +422,7 @@ export default function StudentDashboardScreen({ navigation }) {
           <ActionCard
             icon="settings-outline"
             label="Settings"
-            onPress={() => navigation.navigate('StudentSettings')}
+            onPress={() => navigation.navigate('Settings')}
           />
         </View>
       </View>
@@ -414,7 +484,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    gap: 12,
   },
   statCard: {
     width: '48%',

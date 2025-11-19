@@ -10,12 +10,13 @@ import {
   ScrollView,
 } from 'react-native';
 import axios from 'axios';
-import { API_URL } from '../../config';
+import { API_CONFIG } from '../../config/config';
 
 export default function AssignTask({ navigation }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [className, setClassName] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleAssign = async () => {
     if (!title || !description || !className) {
@@ -23,20 +24,36 @@ export default function AssignTask({ navigation }) {
     }
 
     try {
-      const res = await axios.post(`${API_URL}/teacher/add-task`, {
+      setLoading(true);
+
+      const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.TEACHER}/add-task`;
+
+      console.log('Sending request to:', url);
+
+      const response = await axios.post(url, {
         title,
         description,
         className,
       });
 
       Alert.alert('Success', 'Task Assigned Successfully');
+
+      // Reset fields
       setTitle('');
       setDescription('');
       setClassName('');
+
       navigation.goBack();
     } catch (err) {
-      console.log(err);
-      Alert.alert('Error', 'Failed to assign task');
+      console.log('Task Assign Error:', err?.response?.data || err.message);
+
+      const msg =
+        err?.response?.data?.message ||
+        'Failed to assign task. Please try again.';
+
+      Alert.alert('Error', msg);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -67,8 +84,14 @@ export default function AssignTask({ navigation }) {
           onChangeText={setClassName}
         />
 
-        <TouchableOpacity style={styles.button} onPress={handleAssign}>
-          <Text style={styles.buttonText}>Assign Task</Text>
+        <TouchableOpacity
+          style={[styles.button, loading && { opacity: 0.5 }]}
+          onPress={handleAssign}
+          disabled={loading}
+        >
+          <Text style={styles.buttonText}>
+            {loading ? 'Assigning...' : 'Assign Task'}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>

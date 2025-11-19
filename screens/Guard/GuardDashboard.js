@@ -1,6 +1,6 @@
 // src/screens/Guard/GuardDashboard.js
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 
 const GuardDashboard = ({ navigation }) => {
   return (
@@ -10,21 +10,23 @@ const GuardDashboard = ({ navigation }) => {
 
       <TouchableOpacity
         style={styles.card}
-        onPress={() => navigation.navigate('Scan QR')}
+        onPress={() => navigation.navigate('Scan')}
       >
         <Text style={styles.cardText}>📷 Scan QR Code</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.card}
-        onPress={() => navigation.navigate('Logs')}
+        onPress={() => {
+          Alert.alert('Logs', 'Attendance logs feature coming soon!');
+        }}
       >
         <Text style={styles.cardText}>🕒 View Logs</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.card}
-        onPress={() => navigation.navigate('Settings')}
+        onPress={() => navigation.navigate('Profile')}
       >
         <Text style={styles.cardText}>⚙️ Settings</Text>
       </TouchableOpacity>

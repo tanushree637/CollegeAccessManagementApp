@@ -19,7 +19,7 @@ export default function NotificationsScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const API_URL = 'http://10.0.2.2:5000'; // Updated for emulator
+  const API_URL = API_CONFIG.BASE_URL;
 
   useEffect(() => {
     if (user) {
@@ -30,7 +30,7 @@ export default function NotificationsScreen({ navigation }) {
   const fetchNotifications = async () => {
     try {
       const response = await fetch(
-        `${API_URL}/api/admin/notifications/${user.id}`,
+        `${API_URL}${API_CONFIG.ENDPOINTS.ADMIN}/notifications/${user.id}`,
       );
 
       if (response.ok) {
@@ -87,10 +87,13 @@ export default function NotificationsScreen({ navigation }) {
     try {
       // Mark all unread notifications as read
       const promises = unreadNotifications.map(notif =>
-        fetch(`${API_URL}/api/admin/notifications/${notif.id}/read`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-        }),
+        fetch(
+          `${API_URL}${API_CONFIG.ENDPOINTS.ADMIN}/notifications/${notif.id}/read`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
       );
 
       await Promise.all(promises);

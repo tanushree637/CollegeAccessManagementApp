@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { AuthContext } from '../../context/AuthContext';
+import { resolveBaseUrl, fetchWithTimeout } from '../../utils/network';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 export default function LoginScreen({ navigation }) {
@@ -25,19 +26,54 @@ export default function LoginScreen({ navigation }) {
     }
 
     setLoading(true);
-    const result = await login(email, password);
-    setLoading(false);
+    try {
+      const result = await login(email, password);
+      setLoading(false);
 
-    if (result.success) {
-      const { role } = result;
+      if (result && result.success) {
+        const { role } = result;
 
-      if (role === 'admin') navigation.replace('AdminNavigator');
-      else if (role === 'teacher') navigation.replace('TeacherNavigator');
-      else if (role === 'student') navigation.replace('StudentNavigator');
-      else if (role === 'guard') navigation.replace('GuardNavigator');
-      else Alert.alert('Error', 'Unknown role detected.');
-    } else {
-      Alert.alert('Login Failed', result.message);
+        try {
+          if (role === 'admin') navigation.replace('AdminNavigator');
+          else if (role === 'teacher') navigation.replace('TeacherNavigator');
+          else if (role === 'student') navigation.replace('StudentNavigator');
+          else if (role === 'guard') navigation.replace('GuardNavigator');
+          else Alert.alert('Error', 'Unknown role detected.');
+        } catch (navErr) {
+          console.error('Navigation error after login:', navErr);
+          Alert.alert('Error', 'Navigation failed after login.');
+        }
+      } else {
+        Alert.alert('Login Failed', result?.message || 'Unexpected error');
+      }
+    } catch (err) {
+      setLoading(false);
+      console.error('handleLogin error:', err);
+      Alert.alert('Login Error', 'An unexpected error occurred.');
+    }
+  };
+
+  const handleTestConnection = async () => {
+    try {
+      setLoading(true);
+      const base = await resolveBaseUrl(true);
+      const res = await fetchWithTimeout(`${base}/`, {
+        method: 'GET',
+        timeout: 3000,
+      });
+      const ok = res.ok;
+      setLoading(false);
+      if (ok) {
+        Alert.alert('Server Reachable', `Connected to: ${base}`);
+      } else {
+        Alert.alert(
+          'Server Responded With Error',
+          `URL: ${base} (status ${res.status})`,
+        );
+      }
+    } catch (e) {
+      setLoading(false);
+      Alert.alert('Network Error', `${e?.message || e}`);
     }
   };
 
@@ -79,6 +115,18 @@ export default function LoginScreen({ navigation }) {
           <ActivityIndicator color="#fff" />
         ) : (
           <Text style={styles.buttonText}>Login</Text>
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.button, { backgroundColor: '#718093', marginTop: 10 }]}
+        onPress={handleTestConnection}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.buttonText}>Test Connection</Text>
         )}
       </TouchableOpacity>
     </View>
