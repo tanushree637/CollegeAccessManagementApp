@@ -12,6 +12,7 @@ import {
 import { AuthContext } from '../../context/AuthContext';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { API_CONFIG } from '../../config/config';
+import { getBaseUrlFast, fetchWithTimeout } from '../../utils/network';
 
 export default function NotificationsScreen({ navigation }) {
   const { user } = useContext(AuthContext);
@@ -19,7 +20,7 @@ export default function NotificationsScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const API_URL = API_CONFIG.BASE_URL;
+  // Use dynamic base URL resolution
 
   useEffect(() => {
     if (user) {
@@ -29,9 +30,12 @@ export default function NotificationsScreen({ navigation }) {
 
   const fetchNotifications = async () => {
     try {
-      const response = await fetch(
-        `${API_URL}${API_CONFIG.ENDPOINTS.ADMIN}/notifications/${user.id}`,
-      );
+      const base = await getBaseUrlFast();
+      const url = `${base}${API_CONFIG.ENDPOINTS.ADMIN}/notifications/${user.id}`;
+      const response = await fetchWithTimeout(url, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
 
       if (response.ok) {
         const data = await response.json();
@@ -55,8 +59,9 @@ export default function NotificationsScreen({ navigation }) {
 
   const markNotificationAsRead = async notificationId => {
     try {
-      const response = await fetch(
-        `${API_URL}/api/admin/notifications/${notificationId}/read`,
+      const base = await getBaseUrlFast();
+      const response = await fetchWithTimeout(
+        `${base}${API_CONFIG.ENDPOINTS.ADMIN}/notifications/${notificationId}/read`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -85,17 +90,16 @@ export default function NotificationsScreen({ navigation }) {
     }
 
     try {
-      // Mark all unread notifications as read
+      const base = await getBaseUrlFast();
       const promises = unreadNotifications.map(notif =>
-        fetch(
-          `${API_URL}${API_CONFIG.ENDPOINTS.ADMIN}/notifications/${notif.id}/read`,
+        fetchWithTimeout(
+          `${base}${API_CONFIG.ENDPOINTS.ADMIN}/notifications/${notif.id}/read`,
           {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
           },
         ),
       );
-
       await Promise.all(promises);
 
       // Update local state

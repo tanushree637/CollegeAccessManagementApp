@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,12 @@ import {
   KeyboardAvoidingView,
   ScrollView,
 } from 'react-native';
-import axios from 'axios';
 import { API_CONFIG } from '../../config/config';
+import { apiPostJson } from '../../utils/network';
+import { AuthContext } from '../../context/AuthContext';
 
 export default function AssignTask({ navigation }) {
+  const { user } = useContext(AuthContext);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [className, setClassName] = useState('');
@@ -26,17 +28,22 @@ export default function AssignTask({ navigation }) {
     try {
       setLoading(true);
 
-      const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.TEACHER}/add-task`;
-
-      console.log('Sending request to:', url);
-
-      const response = await axios.post(url, {
+      const endpoint = `${API_CONFIG.ENDPOINTS.TEACHER}/tasks/add`; // corrected route
+      const result = await apiPostJson(endpoint, {
         title,
         description,
         className,
+        teacherId: user?.id || null,
       });
 
-      Alert.alert('Success', 'Task Assigned Successfully');
+      if (result.success) {
+        Alert.alert('Success', 'Task Assigned Successfully');
+      } else {
+        const msg =
+          result?.data?.message || result?.error || 'Failed to assign task.';
+        Alert.alert('Error', msg);
+        return;
+      }
 
       // Reset fields
       setTitle('');
@@ -45,13 +52,8 @@ export default function AssignTask({ navigation }) {
 
       navigation.goBack();
     } catch (err) {
-      console.log('Task Assign Error:', err?.response?.data || err.message);
-
-      const msg =
-        err?.response?.data?.message ||
-        'Failed to assign task. Please try again.';
-
-      Alert.alert('Error', msg);
+      console.log('Task Assign Error:', err?.message || err);
+      Alert.alert('Error', 'Unexpected error while assigning task.');
     } finally {
       setLoading(false);
     }

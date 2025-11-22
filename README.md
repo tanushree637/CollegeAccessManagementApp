@@ -11,6 +11,45 @@ A React Native application for managing college access with role-based authentic
 - **Guard Interface**: QR code scanning for access control
 - **Firebase Integration**: Backend powered by Firebase Firestore
 
+## 🎫 QR Attendance Flow
+
+The system supports secure entry/exit tracking via signed QR tokens:
+
+- Admin (or user dashboard) requests a token using `POST /api/admin/generate-qr` with `userId`, `role`, and `type` (`entry` or `exit`).
+- The response returns a signed token (`base64Payload.signature`) embedded into a QR code.
+- Guard scans the QR code using the `ScanQRScreen` (React Native) which:
+  - Detects either a signed token or JSON payload.
+  - Calls `POST /api/admin/record-attendance` with the token (preferred) or raw `userId` + `type`.
+- Backend verifies token signature & expiry (5 min default) and writes an attendance record with timestamp and location.
+
+QR Payload (before signing) example:
+
+```json
+{
+  "userId": "abc123",
+  "role": "student",
+  "type": "entry",
+  "iat": 1732212345000,
+  "exp": 1732212645000
+}
+```
+
+Fallback: If a plain JSON QR with `userId` & `type` is scanned, it will still record attendance, but signed tokens are recommended for integrity and expiry enforcement.
+
+To test quickly:
+
+```bash
+curl -X POST http://localhost:5000/api/admin/generate-qr \
+   -H "Content-Type: application/json" \
+   -d '{"userId":"abc123","role":"student","type":"entry"}'
+
+curl -X POST http://localhost:5000/api/admin/record-attendance \
+   -H "Content-Type: application/json" \
+   -d '{"token":"<PASTE_TOKEN_HERE>"}'
+```
+
+The mobile `ScanQRScreen` automatically reactivates the scanner after each scan and displays success/error feedback with an option to scan another code.
+
 ## 📋 Prerequisites
 
 - Node.js (v18 or higher)

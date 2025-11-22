@@ -4,10 +4,8 @@ import { Platform } from 'react-native';
 export const API_CONFIG = {
   // Base URL for API calls in development.
   // Tip: If login keeps spinning, ensure this matches your PC's LAN IP.
-  BASE_URL: __DEV__
-    ? // Updated to current Wi‑Fi/hotspot IP discovered via ipconfig
-      'http://10.154.139.53:5000'
-    : 'https://your-production-api.com',
+  // Set to null for dynamic auto-discovery; network.js will resolve.
+  BASE_URL: null,
   // If you're strictly on Android emulator and prefer emulator alias, you can switch to:
   // Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://192.168.1.7:5000'
   ENDPOINTS: {

@@ -18,6 +18,11 @@ module.exports = {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   },
 
+  async getTasksByTeacher(teacherId) {
+    const snapshot = await taskRef.where('teacherId', '==', teacherId).get();
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  },
+
   async updateTask(id, data) {
     await taskRef.doc(id).update(data);
     return { id, ...data };

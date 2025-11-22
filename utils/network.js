@@ -80,3 +80,56 @@ export const resolveBaseUrl = async (forceRefresh = false) => {
 };
 
 export const getBaseUrlFast = async () => resolveBaseUrl(false);
+
+// Generic JSON POST helper with dynamic base resolution + one retry
+export const apiPostJson = async (endpoint, body, options = {}) => {
+  const start = Date.now();
+  let base = await getBaseUrlFast();
+  let attempt = 0;
+  const maxAttempts = 2;
+  let lastErr;
+
+  while (attempt < maxAttempts) {
+    const url = `${base}${endpoint}`;
+    try {
+      const res = await fetchWithTimeout(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(options.headers || {}),
+        },
+        body: JSON.stringify(body),
+        timeout: options.timeout || API_CONFIG.TIMEOUT_MS,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        return {
+          success: true,
+          data,
+          status: res.status,
+          url,
+          duration: Date.now() - start,
+        };
+      }
+      return {
+        success: false,
+        data,
+        status: res.status,
+        url,
+        duration: Date.now() - start,
+      };
+    } catch (e) {
+      lastErr = e;
+      if (attempt === 0) {
+        // force re-resolve and retry
+        base = await resolveBaseUrl(true);
+      }
+    }
+    attempt++;
+  }
+  return {
+    success: false,
+    error: lastErr?.message || 'network',
+    duration: Date.now() - start,
+  };
+};

@@ -13,6 +13,8 @@ import { Card } from 'react-native-paper';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useFocusEffect } from '@react-navigation/native';
 import { API_CONFIG } from '../../config/config';
+import { getBaseUrlFast } from '../../utils/network';
+import { Platform } from 'react-native';
 import {
   performanceMonitor,
   fetchWithRetry,
@@ -86,8 +88,19 @@ export default function AdminDashboard() {
 
       performanceMonitor.startTimer('Dashboard API Call');
 
+      // Dynamically resolve base URL (handles emulator vs physical device)
+      let base = await getBaseUrlFast();
+      if (!base || !base.startsWith('http')) {
+        // Fallback for when resolution returns null (e.g., API_CONFIG.BASE_URL unset)
+        base =
+          Platform.OS === 'android'
+            ? 'http://10.0.2.2:5000'
+            : 'http://localhost:5000';
+        console.warn('⚠️ Base URL was null; using fallback:', base);
+      }
+
       const res = await fetchWithRetry(
-        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.ADMIN}/dashboard-with-activity?limit=5`,
+        `${base}${API_CONFIG.ENDPOINTS.ADMIN}/dashboard-with-activity?limit=5`,
         {},
         15000, // 15 second timeout
         2, // retries

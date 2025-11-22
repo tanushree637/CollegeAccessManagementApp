@@ -34,14 +34,21 @@ exports.addTask = async (req, res) => {
   }
 };
 
-// 🔹 GET ALL TASKS
+// 🔹 GET TASKS (optionally filtered by teacherId)
 exports.getAllTasks = async (req, res) => {
   try {
-    const tasks = await taskModel.getAllTasks();
+    const { teacherId } = req.query;
+    let tasks;
+    if (teacherId) {
+      tasks = await taskModel.getTasksByTeacher(teacherId);
+    } else {
+      tasks = await taskModel.getAllTasks();
+    }
 
     res.status(200).json({
       message: 'Tasks fetched successfully',
       tasks,
+      filtered: Boolean(teacherId),
     });
   } catch (err) {
     res

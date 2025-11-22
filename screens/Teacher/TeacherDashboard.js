@@ -15,6 +15,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import QRCode from 'react-native-qrcode-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getBaseUrlFast, fetchWithTimeout } from '../../utils/network';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function TeacherDashboard({ navigation }) {
   const { user } = useContext(AuthContext);
@@ -155,7 +156,10 @@ export default function TeacherDashboard({ navigation }) {
 
       const base = await getBaseUrlFast();
       const notifUrl = `${base}${API_CONFIG.ENDPOINTS.ADMIN}/notifications/${user.id}`;
-      const tasksUrl = `${base}${API_CONFIG.ENDPOINTS.TEACHER}/tasks/${user.id}`;
+      // Filter tasks by teacherId via query param
+      const tasksUrl = `${base}${
+        API_CONFIG.ENDPOINTS.TEACHER
+      }/tasks?teacherId=${encodeURIComponent(user.id)}`;
 
       const [notifRes, tasksRes] = await Promise.allSettled([
         fetchWithTimeout(notifUrl, {
@@ -200,6 +204,15 @@ export default function TeacherDashboard({ navigation }) {
       setRefreshing(false);
     }
   };
+
+  // Refresh tasks/notifications whenever screen gains focus (after assigning new task)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user) {
+        fetchDashboard();
+      }
+    }, [user]),
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
