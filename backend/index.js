@@ -12,8 +12,21 @@ const studentRoutes = require('./routes/studentRoutes');
 const guardRoutes = require('./routes/guardRoutes');
 
 const app = express();
+// Disable ETag generation to prevent 304 conditional responses
+app.set('etag', false);
 app.use(cors());
 app.use(bodyParser.json());
+
+// Global no-cache headers middleware (applies to all responses)
+app.use((req, res, next) => {
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    Pragma: 'no-cache',
+    Expires: '0',
+    'Surrogate-Control': 'no-store',
+  });
+  next();
+});
 
 // Lightweight request logger
 app.use((req, res, next) => {

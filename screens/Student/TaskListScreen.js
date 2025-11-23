@@ -9,13 +9,20 @@ import {
   Alert,
 } from 'react-native';
 import { AuthContext } from '../../context/AuthContext';
+import { API_CONFIG } from '../../config/config';
+import { getBaseUrlFast, resolveBaseUrl } from '../../utils/network';
 
 export default function TaskListScreen() {
   const { user } = useContext(AuthContext);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const API_URL = 'http://192.168.1.7:5000';
+  // Dynamic base URL; fallback to config or discovery
+  const getBase = async () => {
+    let base = API_CONFIG.BASE_URL || (await getBaseUrlFast());
+    if (!base) base = await resolveBaseUrl(true);
+    return base;
+  };
 
   useEffect(() => {
     if (user) fetchTasks();
@@ -23,12 +30,25 @@ export default function TaskListScreen() {
 
   const fetchTasks = async () => {
     try {
-      const response = await fetch(`${API_URL}/tasks/student/${user.email}`);
-      const data = await response.json();
-      setTasks(data || []);
+      const base = await getBase();
+      if (!base) throw new Error('Base URL unresolved');
+      const url = `${base}/tasks/student/${user.email}`;
+      console.log('[TaskListScreen] Fetching tasks:', url);
+      const response = await fetch(url);
+      const data = await response.json().catch(() => []);
+      if (Array.isArray(data)) {
+        console.log('[TaskListScreen] Received tasks count:', data.length);
+        setTasks(data);
+      } else {
+        console.warn('[TaskListScreen] Unexpected tasks payload shape');
+        setTasks([]);
+      }
     } catch (error) {
+      const msg = /Base URL unresolved/i.test(error?.message)
+        ? 'Cannot reach server. Ensure backend running & same network.'
+        : 'Unable to fetch tasks.';
       console.error('Error fetching tasks:', error);
-      Alert.alert('Error', 'Unable to fetch tasks.');
+      Alert.alert('Error', msg);
     } finally {
       setLoading(false);
     }
@@ -36,20 +56,37 @@ export default function TaskListScreen() {
 
   const updateTaskStatus = async (taskId, newStatus) => {
     try {
-      const response = await fetch(`${API_URL}/tasks/update/${taskId}`, {
+      const base = await getBase();
+      if (!base) throw new Error('Base URL unresolved');
+      const url = `${base}/tasks/update/${taskId}`;
+      console.log(
+        '[TaskListScreen] Updating task:',
+        taskId,
+        'status ->',
+        newStatus,
+        'URL:',
+        url,
+      );
+      const response = await fetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
 
       if (response.ok) {
+        console.log('[TaskListScreen] Update success for task:', taskId);
         Alert.alert('Success', `Task marked as ${newStatus}`);
         fetchTasks();
       } else {
+        console.warn('[TaskListScreen] Update failed status:', response.status);
         Alert.alert('Error', 'Failed to update task.');
       }
     } catch (error) {
+      const msg = /Base URL unresolved/i.test(error?.message)
+        ? 'Cannot reach server for update.'
+        : 'Error updating task.';
       console.error('Error updating task:', error);
+      Alert.alert('Error', msg);
     }
   };
 

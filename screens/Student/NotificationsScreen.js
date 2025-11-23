@@ -12,6 +12,7 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { AuthContext } from '../../context/AuthContext';
 import { API_CONFIG } from '../../config/config';
+import { getBaseUrlFast, resolveBaseUrl } from '../../utils/network';
 
 export default function NotificationsScreen({ navigation }) {
   const { user } = useContext(AuthContext);
@@ -27,16 +28,21 @@ export default function NotificationsScreen({ navigation }) {
 
   const fetchNotifications = async () => {
     try {
-      const response = await fetch(
-        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.ADMIN}/notifications/${user.id}`,
-      );
+      let base = API_CONFIG.BASE_URL || (await getBaseUrlFast());
+      if (!base) base = await resolveBaseUrl(true);
+      if (!base) throw new Error('Base URL unresolved');
+      const url = `${base}${API_CONFIG.ENDPOINTS.ADMIN}/notifications/${user.id}`;
+      const response = await fetch(url);
 
       if (response.ok) {
         const data = await response.json();
         setNotifications(data.notifications || []);
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to load notifications.');
+      const msg = /Base URL unresolved/i.test(error?.message)
+        ? 'Cannot reach server. Ensure backend is running and device shares network.'
+        : 'Failed to load notifications.';
+      Alert.alert('Error', msg);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -50,20 +56,23 @@ export default function NotificationsScreen({ navigation }) {
 
   const markNotificationAsRead = async notificationId => {
     try {
-      const response = await fetch(
-        `${API_CONFIG.BASE_URL}/api/admin/notifications/${notificationId}/read`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
+      let base = API_CONFIG.BASE_URL || (await getBaseUrlFast());
+      if (!base) base = await resolveBaseUrl(true);
+      if (!base) throw new Error('Base URL unresolved for mark read');
+      const url = `${base}/api/admin/notifications/${notificationId}/read`;
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+      });
 
       if (response.ok) {
         setNotifications(prev =>
           prev.map(n => (n.id === notificationId ? { ...n, isRead: true } : n)),
         );
       }
-    } catch (err) {}
+    } catch (err) {
+      // Silent; could add Alert if needed
+    }
   };
 
   const markAllAsRead = async () => {
@@ -74,9 +83,12 @@ export default function NotificationsScreen({ navigation }) {
     }
 
     try {
+      let base = API_CONFIG.BASE_URL || (await getBaseUrlFast());
+      if (!base) base = await resolveBaseUrl(true);
+      if (!base) throw new Error('Base URL unresolved for bulk read');
       await Promise.all(
         unread.map(n =>
-          fetch(`${API_CONFIG.BASE_URL}/api/admin/notifications/${n.id}/read`, {
+          fetch(`${base}/api/admin/notifications/${n.id}/read`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
           }),
@@ -161,7 +173,12 @@ export default function NotificationsScreen({ navigation }) {
       <ScrollView
         style={styles.scrollView}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#1E3A8A', '#2563EB']}
+            progressBackgroundColor="#FFFFFF"
+          />
         }
       >
         {notifications.length > 0 ? (

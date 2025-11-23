@@ -8,15 +8,20 @@ import {
   Alert,
 } from 'react-native';
 import { AuthContext } from '../../context/AuthContext';
-import { getBaseUrlFast } from '../../utils/network';
+import { getBaseUrlFast, resolveBaseUrl } from '../../utils/network';
+import studentApi from './studentApi';
 
 export default function TimetableScreen() {
   const { user } = useContext(AuthContext);
   const [timetable, setTimetable] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Resolve base URL dynamically to avoid emulator/device IP issues
-  const getApi = async () => await getBaseUrlFast();
+  // Resolve base URL dynamically with fallback retry
+  const getApi = async () => {
+    let base = await getBaseUrlFast();
+    if (!base) base = await resolveBaseUrl(true);
+    return base;
+  };
 
   const SAMPLE_STUDENT_TIMETABLE = [
     {
@@ -68,16 +73,25 @@ export default function TimetableScreen() {
   const fetchTimetable = async () => {
     try {
       const base = await getApi();
-      const response = await fetch(`${base}/timetable/${user.email}`);
-      const data = await response.json();
-
-      if (Array.isArray(data)) {
+      if (!base) throw new Error('Base URL unresolved');
+      // Use studentApi helper for consistency
+      const { ok, data } = await studentApi.get(`/timetable/${user.email}`);
+      if (ok && Array.isArray(data)) {
+        setTimetable(data.length ? data : SAMPLE_STUDENT_TIMETABLE);
+      } else if (Array.isArray(data)) {
         setTimetable(data.length ? data : SAMPLE_STUDENT_TIMETABLE);
       } else {
         setTimetable(SAMPLE_STUDENT_TIMETABLE);
       }
     } catch (error) {
+      const baseErr = /Base URL unresolved/i.test(error?.message);
       console.error('Error fetching timetable:', error);
+      if (baseErr) {
+        // Provide clearer guidance for network issues
+        console.warn(
+          'Timetable base URL could not be resolved. Ensure backend on port 5000 and device shares network.',
+        );
+      }
       // Show a fallback instead of empty UI
       setTimetable(SAMPLE_STUDENT_TIMETABLE);
     } finally {

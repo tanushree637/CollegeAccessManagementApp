@@ -133,9 +133,12 @@ export default function TeacherDashboard({ navigation }) {
       console.log('Response data:', data);
 
       if (res.ok && data.token) {
-        if (type === 'entry') setQrEntryToken(data.token);
-        else setQrExitToken(data.token);
-        console.log(`${type} QR token generated successfully`);
+        const scanUrl = `${baseForLog}${
+          API_CONFIG.ENDPOINTS.ADMIN
+        }/scan-attendance?token=${encodeURIComponent(data.token)}`;
+        if (type === 'entry') setQrEntryToken(scanUrl);
+        else setQrExitToken(scanUrl);
+        console.log(`${type} QR URL generated successfully`);
       } else {
         console.warn('Failed to get QR token', data);
       }
@@ -266,7 +269,12 @@ export default function TeacherDashboard({ navigation }) {
     <ScrollView
       style={styles.container}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={['#1E3A8A', '#2563EB']}
+          progressBackgroundColor="#FFFFFF"
+        />
       }
     >
       {/* Header */}
@@ -399,6 +407,16 @@ export default function TeacherDashboard({ navigation }) {
         >
           <Ionicons name="add-outline" size={20} color="#fff" />
           <Text style={styles.primaryButtonText}>Assign New Task</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.primaryButton,
+            { marginTop: 12, backgroundColor: '#9333EA' },
+          ]}
+          onPress={() => navigation.navigate('Attendance')}
+        >
+          <Ionicons name="calendar-outline" size={20} color="#fff" />
+          <Text style={styles.primaryButtonText}>View Attendance</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>

@@ -1,5 +1,6 @@
 // screens/Student/StudentDashboardScreen.js
-import React, { useEffect, useState, useContext } from 'react';
+// Rebuilt Student Dashboard (clean JSX) after previous patch corruption
+import React, { useEffect, useState, useContext, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,8 +16,13 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import QRCode from 'react-native-qrcode-svg';
 import { AuthContext } from '../../context/AuthContext';
 import { API_CONFIG } from '../../config/config';
+import {
+  getBaseUrlFast,
+  resolveBaseUrl,
+  fetchWithTimeout,
+} from '../../utils/network';
 
-// small in-memory cache similar to Admin's pattern (keeps dashboard snappy)
+// In-memory cache
 let studentDashboardCache = {
   data: null,
   timestamp: null,
@@ -38,87 +44,94 @@ export default function StudentDashboardScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [qrEntryToken, setQrEntryToken] = useState('');
   const [qrExitToken, setQrExitToken] = useState('');
+  const isFetchingRef = useRef(false);
+  const TIMEOUT_MS = 12000;
 
-  // Use API_CONFIG for base URL and endpoints
-  const BASE = API_CONFIG.BASE_URL;
-  const NOTIF_ENDPOINT = `${BASE}${API_CONFIG.ENDPOINTS.ADMIN}/notifications`;
-  const TASK_ENDPOINT = `${BASE}${API_CONFIG.ENDPOINTS.STUDENT}/tasks`;
-
-  // Fetch on mount and when screen gets focus (like Admin)
   useEffect(() => {
-    fetchDashboardData();
-    // generate QR tokens for student (entry + exit)
+    fetchDashboard(true);
     if (user) {
-      generateQrToken('entry').catch(e => console.log(e));
-      generateQrToken('exit').catch(e => console.log(e));
+      generateQr('entry');
+      generateQr('exit');
     }
   }, []);
 
   useFocusEffect(
     React.useCallback(() => {
-      // Force refresh when coming back to screen
-      if (!loading) {
-        fetchDashboardData(true);
-      }
-    }, [loading]),
+      fetchDashboard(true);
+    }, []),
   );
 
-  const fetchDashboardData = async (forceRefresh = false) => {
+  const resolveBase = async () => {
+    let base = API_CONFIG.BASE_URL || (await getBaseUrlFast());
+    if (!base) base = await resolveBaseUrl(true);
+    return base;
+  };
+
+  const fetchDashboard = async (force = false) => {
     if (!user?.id) {
       setLoading(false);
       return;
     }
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
 
     try {
-      // Use cache unless forced
-      if (!forceRefresh && studentDashboardCache.isValid()) {
-        const cached = studentDashboardCache.data;
-        setTasks(cached.tasks || []);
-        setNotifications(cached.notifications || []);
+      if (!force && studentDashboardCache.isValid()) {
+        const c = studentDashboardCache.data;
+        setNotifications(c.notifications || []);
+        setTasks(c.tasks || []);
         setLoading(false);
         return;
       }
-
       setLoading(true);
+      const base = await resolveBase();
+      if (!base) throw new Error('Base URL unresolved');
 
-      // fetch notifications (admin route returns notifications for this user)
-      const notifRes = await fetch(`${NOTIF_ENDPOINT}/${user.id}`);
+      const notifUrl = `${base}${API_CONFIG.ENDPOINTS.ADMIN}/notifications/${user.id}`;
+      const tasksUrl = `${base}${API_CONFIG.ENDPOINTS.STUDENT}/tasks/${user.id}`;
+
+      const [notifRes, taskRes] = await Promise.all([
+        fetchWithTimeout(notifUrl, { timeout: TIMEOUT_MS }),
+        fetchWithTimeout(tasksUrl, { timeout: TIMEOUT_MS }),
+      ]);
+
       let notifData = [];
       if (notifRes.ok) {
-        const parsed = await notifRes.json();
-        notifData = parsed.notifications || [];
+        const nd = await notifRes.json();
+        notifData = nd.notifications || [];
       }
 
-      // fetch tasks for student
-      const taskRes = await fetch(`${TASK_ENDPOINT}/${user.id}`);
       let taskData = [];
       if (taskRes.ok) {
-        const parsed = await taskRes.json();
-        taskData = parsed.tasks || [];
+        const td = await taskRes.json();
+        taskData = td.tasks || [];
       }
 
       setNotifications(notifData);
       setTasks(taskData);
-
-      // cache
       studentDashboardCache.data = {
         notifications: notifData,
         tasks: taskData,
       };
       studentDashboardCache.timestamp = Date.now();
-    } catch (err) {
-      console.error('Dashboard fetch error:', err);
-      Alert.alert('Error', 'Failed to load dashboard. Check your connection.');
+    } catch (e) {
+      const msg = /Base URL unresolved/i.test(e.message)
+        ? 'Cannot reach server. Ensure backend running & same network.'
+        : 'Failed to load dashboard.';
+      Alert.alert('Error', msg);
     } finally {
       setLoading(false);
       setRefreshing(false);
+      isFetchingRef.current = false;
     }
   };
 
-  const generateQrToken = async type => {
+  const generateQr = async type => {
     try {
+      const base = await resolveBase();
+      if (!base) return;
       const res = await fetch(
-        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.ADMIN}/generate-qr`,
+        `${base}${API_CONFIG.ENDPOINTS.ADMIN}/generate-qr`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -127,43 +140,41 @@ export default function StudentDashboardScreen({ navigation }) {
       );
       const data = await res.json();
       if (res.ok && data.token) {
-        if (type === 'entry') setQrEntryToken(data.token);
-        else setQrExitToken(data.token);
+        const scanUrl = `${base}${
+          API_CONFIG.ENDPOINTS.ADMIN
+        }/scan-attendance?token=${encodeURIComponent(data.token)}`;
+        if (type === 'entry') setQrEntryToken(scanUrl);
+        else setQrExitToken(scanUrl);
       }
-    } catch (err) {
-      console.error('Student QR token error:', err);
-    }
+    } catch {}
   };
 
   const onRefresh = () => {
     setRefreshing(true);
-    // clear local cache to force API fetch
     studentDashboardCache.clear();
-    fetchDashboardData(true);
+    fetchDashboard(true);
   };
 
-  const markNotificationAsRead = async notificationId => {
+  const markNotificationAsRead = async id => {
     try {
-      // use Admin endpoint to mark read (consistent with backend)
+      const base = await resolveBase();
+      if (!base) return;
       const res = await fetch(
-        `${API_CONFIG.BASE_URL}/api/admin/notifications/${notificationId}/read`,
-        { method: 'PATCH', headers: { 'Content-Type': 'application/json' } },
+        `${base}${API_CONFIG.ENDPOINTS.ADMIN}/notifications/${id}/read`,
+        { method: 'PATCH' },
       );
-
       if (res.ok) {
         setNotifications(prev =>
-          prev.map(n => (n.id === notificationId ? { ...n, isRead: true } : n)),
+          prev.map(n => (n.id === id ? { ...n, isRead: true } : n)),
         );
       }
-    } catch (err) {
-      console.error('Mark read error:', err);
-    }
+    } catch {}
   };
 
-  const formatDate = dateString => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
+  const formatDate = iso => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
@@ -171,8 +182,8 @@ export default function StudentDashboardScreen({ navigation }) {
     });
   };
 
-  const getStatusColor = status => {
-    switch ((status || '').toLowerCase()) {
+  const getStatusColor = s => {
+    switch ((s || '').toLowerCase()) {
       case 'completed':
         return '#10B981';
       case 'in-progress':
@@ -185,19 +196,22 @@ export default function StudentDashboardScreen({ navigation }) {
     }
   };
 
-  // loading skeleton consistent with Admin
   if (loading) {
     return (
       <ScrollView
         contentContainerStyle={styles.container}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#1E3A8A', '#2563EB']}
+            progressBackgroundColor="#FFFFFF"
+          />
         }
       >
         <View style={styles.header}>
           <Text style={styles.title}>Student Dashboard</Text>
         </View>
-
         <View style={styles.cardContainer}>
           {[1, 2].map(i => (
             <View key={i} style={styles.statCardSkeleton}>
@@ -211,7 +225,6 @@ export default function StudentDashboardScreen({ navigation }) {
             </View>
           ))}
         </View>
-
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Notifications</Text>
           <ActivityIndicator
@@ -246,55 +259,36 @@ export default function StudentDashboardScreen({ navigation }) {
         </Text>
         <TouchableOpacity
           style={styles.refreshButton}
-          onPress={() => fetchDashboardData(true)}
+          onPress={() => fetchDashboard(true)}
         >
           <Ionicons name="refresh-outline" size={20} color="#1E3A8A" />
         </TouchableOpacity>
       </View>
 
-      {/* QR codes for student entry/exit */}
       <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
         <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
           Your QR Codes
         </Text>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <View
-            style={{
-              width: '48%',
-              alignItems: 'center',
-              padding: 8,
-              backgroundColor: '#fff',
-              borderRadius: 10,
-            }}
-          >
-            <Text style={{ fontWeight: '600', marginBottom: 8 }}>Entry</Text>
+          <View style={styles.qrBlock}>
+            <Text style={styles.qrLabel}>Entry</Text>
             {qrEntryToken ? (
               <QRCode value={qrEntryToken} size={110} />
             ) : (
-              <Text style={{ color: '#9CA3AF' }}>Generating...</Text>
+              <Text style={styles.qrGenerating}>Generating...</Text>
             )}
           </View>
-
-          <View
-            style={{
-              width: '48%',
-              alignItems: 'center',
-              padding: 8,
-              backgroundColor: '#fff',
-              borderRadius: 10,
-            }}
-          >
-            <Text style={{ fontWeight: '600', marginBottom: 8 }}>Exit</Text>
+          <View style={styles.qrBlock}>
+            <Text style={styles.qrLabel}>Exit</Text>
             {qrExitToken ? (
               <QRCode value={qrExitToken} size={110} />
             ) : (
-              <Text style={{ color: '#9CA3AF' }}>Generating...</Text>
+              <Text style={styles.qrGenerating}>Generating...</Text>
             )}
           </View>
         </View>
       </View>
 
-      {/* Stat cards similar to Admin */}
       <View style={styles.cardContainer}>
         <StatCard
           icon="notifications-outline"
@@ -310,7 +304,6 @@ export default function StudentDashboardScreen({ navigation }) {
         />
       </View>
 
-      {/* Sections */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recent Notifications</Text>
@@ -320,17 +313,16 @@ export default function StudentDashboardScreen({ navigation }) {
             <Text style={styles.seeAllText}>See All</Text>
           </TouchableOpacity>
         </View>
-
         {notifications.length > 0 ? (
-          notifications.slice(0, 3).map(notif => (
+          notifications.slice(0, 3).map(n => (
             <TouchableOpacity
-              key={notif.id}
+              key={n.id}
               style={[
                 styles.notificationCard,
-                !notif.isRead && styles.unreadNotification,
+                !n.isRead && styles.unreadNotification,
               ]}
               onPress={() => {
-                markNotificationAsRead(notif.id);
+                markNotificationAsRead(n.id);
                 navigation.navigate('Notifications');
               }}
             >
@@ -338,17 +330,17 @@ export default function StudentDashboardScreen({ navigation }) {
                 <Text
                   style={[
                     styles.notificationTitle,
-                    !notif.isRead && styles.unreadTitle,
+                    !n.isRead && styles.unreadTitle,
                   ]}
                 >
-                  {notif.title}
+                  {n.title}
                 </Text>
                 <Text style={styles.notificationDate}>
-                  {formatDate(notif.createdAt)}
+                  {formatDate(n.createdAt)}
                 </Text>
               </View>
               <Text style={styles.notificationText} numberOfLines={2}>
-                {notif.message}
+                {n.message}
               </Text>
             </TouchableOpacity>
           ))
@@ -364,28 +356,22 @@ export default function StudentDashboardScreen({ navigation }) {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Your Tasks</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Tasks')}>
-            <Text style={styles.seeAllText}>See All</Text>
-          </TouchableOpacity>
         </View>
-
         {tasks.length > 0 ? (
-          tasks.slice(0, 3).map((task, idx) => (
-            <View key={task.id || idx} style={styles.taskCard}>
+          tasks.slice(0, 3).map((t, i) => (
+            <View key={t.id || i} style={styles.taskCard}>
               <View style={styles.taskHeader}>
-                <Text style={styles.taskTitle}>{task.title}</Text>
+                <Text style={styles.taskTitle}>{t.title}</Text>
                 <View
                   style={[
                     styles.statusBadge,
-                    { backgroundColor: getStatusColor(task.status) },
+                    { backgroundColor: getStatusColor(t.status) },
                   ]}
                 >
-                  <Text style={styles.statusText}>
-                    {task.status || 'Unknown'}
-                  </Text>
+                  <Text style={styles.statusText}>{t.status || 'Unknown'}</Text>
                 </View>
               </View>
-              <Text style={styles.taskText}>Due: {task.dueDate || '—'}</Text>
+              <Text style={styles.taskText}>Due: {t.dueDate || '—'}</Text>
             </View>
           ))
         ) : (
@@ -397,32 +383,30 @@ export default function StudentDashboardScreen({ navigation }) {
         )}
       </View>
 
-      {/* Optional quick links at bottom (Profile / Timetable / Settings) */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.actionsRow}>
           <ActionCard
             icon="calendar-outline"
-            label="My Timetable"
+            label="Timetable"
             onPress={() => navigation.navigate('Timetable')}
           />
-          <ActionCard
-            icon="list-outline"
-            label="My Tasks"
-            onPress={() => navigation.navigate('Tasks')}
-          />
-        </View>
-
-        <View style={styles.actionsRow}>
           <ActionCard
             icon="notifications-outline"
             label="Notifications"
             onPress={() => navigation.navigate('Notifications')}
           />
+        </View>
+        <View style={styles.actionsRow}>
           <ActionCard
             icon="settings-outline"
             label="Settings"
             onPress={() => navigation.navigate('Settings')}
+          />
+          <ActionCard
+            icon="calendar"
+            label="Attendance"
+            onPress={() => navigation.navigate('Attendance')}
           />
         </View>
       </View>
@@ -430,7 +414,6 @@ export default function StudentDashboardScreen({ navigation }) {
   );
 }
 
-/* small reusable components to keep layout consistent with Admin */
 const StatCard = ({ icon, label, value, color }) => (
   <View style={styles.statCard}>
     <Ionicons name={icon} size={28} color={color} />
@@ -454,12 +437,8 @@ const EmptyState = ({ icon, title, subtitle }) => (
   </View>
 );
 
-/* styles aligned with Admin Dashboard styles */
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
+  container: { flex: 1, backgroundColor: '#F9FAFB' },
   header: {
     padding: 16,
     paddingBottom: 8,
@@ -467,18 +446,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1E3A8A',
-  },
+  title: { fontSize: 22, fontWeight: '700', color: '#1E3A8A' },
   refreshButton: {
     padding: 8,
     backgroundColor: '#fff',
     borderRadius: 8,
     elevation: 2,
   },
-
   cardContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -525,7 +499,6 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     width: '40%',
   },
-
   statValue: {
     fontSize: 20,
     fontWeight: '700',
@@ -533,7 +506,6 @@ const styles = StyleSheet.create({
     color: '#1E3A8A',
   },
   statLabel: { fontSize: 12, color: '#6B7280', marginTop: 6 },
-
   section: { marginTop: 8, marginBottom: 20 },
   sectionHeader: {
     flexDirection: 'row',
@@ -544,7 +516,6 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 18, fontWeight: '600', color: '#111827' },
   seeAllText: { color: '#1E3A8A', fontWeight: '600' },
-
   notificationCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -569,16 +540,6 @@ const styles = StyleSheet.create({
   unreadTitle: { color: '#1E3A8A' },
   notificationDate: { fontSize: 12, color: '#6B7280' },
   notificationText: { fontSize: 14, color: '#374151', marginTop: 6 },
-  unreadDot: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#1E3A8A',
-  },
-
   taskCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -597,7 +558,6 @@ const styles = StyleSheet.create({
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   statusText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   taskText: { color: '#6B7280' },
-
   actionsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -618,7 +578,6 @@ const styles = StyleSheet.create({
     color: '#374151',
     fontWeight: '600',
   },
-
   emptyState: { alignItems: 'center', paddingVertical: 24 },
   emptyTitle: {
     fontSize: 18,
@@ -627,4 +586,13 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   emptySubText: { fontSize: 14, color: '#9CA3AF', marginTop: 6 },
+  qrBlock: {
+    width: '48%',
+    alignItems: 'center',
+    padding: 8,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+  },
+  qrLabel: { fontWeight: '600', marginBottom: 8 },
+  qrGenerating: { color: '#9CA3AF' },
 });

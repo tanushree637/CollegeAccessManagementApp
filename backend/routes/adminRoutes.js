@@ -7,6 +7,8 @@ const {
   createUser,
   recordAttendance,
   getRecentAttendance,
+  scanAttendanceViaToken,
+  getUserAttendanceRecords,
   sendNotification,
   getUserNotifications,
   markNotificationAsRead,
@@ -22,6 +24,10 @@ router.get('/recent-attendance', getRecentAttendance);
 router.post('/create-user', createUser);
 router.post('/record-attendance', recordAttendance);
 router.post('/generate-qr', generateQRToken);
+// QR scan (GET) endpoint so a regular phone camera opening the URL records attendance
+router.get('/scan-attendance', scanAttendanceViaToken);
+// User-specific attendance history
+router.get('/attendance/:userId', getUserAttendanceRecords);
 
 // Notification routes
 router.post('/send-notification', sendNotification);

@@ -189,7 +189,12 @@ export default function NotificationsScreen({ navigation }) {
       <ScrollView
         style={styles.scrollView}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#1E3A8A', '#2563EB']}
+            progressBackgroundColor="#FFFFFF"
+          />
         }
       >
         {notifications.length > 0 ? (

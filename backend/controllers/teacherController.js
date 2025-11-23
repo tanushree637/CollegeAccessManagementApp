@@ -22,6 +22,7 @@ exports.addTask = async (req, res) => {
 
     const task = await taskModel.createTask(newTask);
 
+    res.set('Cache-Control', 'no-store');
     res.status(200).json({
       message: 'Task assigned successfully',
       task,
@@ -45,6 +46,7 @@ exports.getAllTasks = async (req, res) => {
       tasks = await taskModel.getAllTasks();
     }
 
+    res.set('Cache-Control', 'no-store');
     res.status(200).json({
       message: 'Tasks fetched successfully',
       tasks,
@@ -70,6 +72,7 @@ exports.getAssignedStudents = async (req, res) => {
       ...doc.data(),
     }));
 
+    res.set('Cache-Control', 'no-store');
     res.status(200).json({
       message: 'Students fetched successfully',
       students,

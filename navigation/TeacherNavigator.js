@@ -5,6 +5,7 @@ import TeacherDashboard from '../screens/Teacher/TeacherDashboard';
 import TimetableScreen from '../screens/Teacher/TeacherTimetable';
 import NoticesScreen from '../screens/Teacher/NotificationsScreen';
 import SettingsScreen from '../screens/Teacher/SettingsScreen';
+import TeacherAttendanceReport from '../screens/Teacher/AttendanceReport';
 import AssignTaskScreen from '../screens/Teacher/AssignTaskScreen';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
@@ -33,6 +34,9 @@ const TeacherTabs = () => {
             case 'Settings':
               iconName = 'settings-outline';
               break;
+            case 'Attendance':
+              iconName = 'calendar-outline';
+              break;
           }
 
           return <Ionicons name={iconName} size={size} color={color} />;
@@ -43,6 +47,7 @@ const TeacherTabs = () => {
       <Tab.Screen name="Timetable" component={TimetableScreen} />
       <Tab.Screen name="Notices" component={NoticesScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
+      <Tab.Screen name="Attendance" component={TeacherAttendanceReport} />
     </Tab.Navigator>
   );
 };

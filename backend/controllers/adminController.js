@@ -2,6 +2,7 @@
 const { db } = require('../config/firebaseConfig');
 const { sendEmail, testEmailConfig } = require('../utils/emailService');
 const crypto = require('crypto');
+const { verifyToken } = require('../utils/qrToken');
 
 // 🔹 Dashboard data for Admin (Optimized)
 exports.getDashboardData = async (req, res) => {
@@ -68,6 +69,7 @@ exports.getDashboardData = async (req, res) => {
 
     console.timeEnd('Dashboard Query');
 
+    res.set('Cache-Control', 'no-store');
     res.status(200).json({
       success: true,
       message: 'Dashboard data fetched successfully',
@@ -216,6 +218,7 @@ exports.getDashboardWithActivity = async (req, res) => {
 
     console.timeEnd('Combined Dashboard Query');
 
+    res.set('Cache-Control', 'no-store');
     res.status(200).json({
       success: true,
       message: 'Dashboard data with activity fetched successfully',
@@ -247,6 +250,7 @@ exports.getAllUsers = async (req, res) => {
       ...doc.data(),
     }));
 
+    res.set('Cache-Control', 'no-store');
     res.status(200).json({
       message: 'Users fetched successfully',
       users,
@@ -326,6 +330,86 @@ exports.recordAttendance = async (req, res) => {
       message: 'Failed to record attendance',
       error: error.message,
     });
+  }
+};
+
+// 🔹 Scan attendance via GET token (for regular phone camera opening URL)
+exports.scanAttendanceViaToken = async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) {
+      return res.status(400).send('<h3>Missing token</h3>');
+    }
+    const payload = verifyToken(token);
+    if (!payload) {
+      return res.status(400).send('<h3>Invalid or expired token</h3>');
+    }
+    if (payload.exp && Date.now() > payload.exp) {
+      return res.status(400).send('<h3>Token expired</h3>');
+    }
+    const today = new Date();
+    const dateString = today.toISOString().split('T')[0];
+    const timestamp = today.toISOString();
+    // Fetch user name for friendly response (optional)
+    let userName = 'User';
+    try {
+      const userDoc = await db.collection('users').doc(payload.userId).get();
+      if (userDoc.exists) userName = userDoc.data().fullName || userName;
+    } catch {}
+    const attendanceRecord = {
+      userId: payload.userId,
+      type: payload.type,
+      date: dateString,
+      timestamp,
+      location: 'QR Scan',
+      createdAt: timestamp,
+    };
+    await db.collection('attendance').add(attendanceRecord);
+    res.set('Cache-Control', 'no-store');
+    return res.status(200).send(
+      `<html><body style="font-family:Arial;padding:20px;">
+        <h2>Attendance Recorded</h2>
+        <p><strong>Name:</strong> ${userName}</p>
+        <p><strong>Type:</strong> ${payload.type}</p>
+        <p><strong>Time:</strong> ${new Date(timestamp).toLocaleString()}</p>
+        <p style="color:green;font-weight:bold;">Success!</p>
+      </body></html>`,
+    );
+  } catch (error) {
+    console.error('Scan Attendance Error:', error);
+    return res.status(500).send('<h3>Server error recording attendance</h3>');
+  }
+};
+
+// 🔹 Get attendance records for a specific user
+exports.getUserAttendanceRecords = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'User ID required' });
+    }
+    let snapshot = await db
+      .collection('attendance')
+      .where('userId', '==', userId)
+      .get();
+    let records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Sort by createdAt desc
+    records.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    res.set('Cache-Control', 'no-store');
+    return res
+      .status(200)
+      .json({ success: true, attendance: records, count: records.length });
+  } catch (error) {
+    console.error('Get User Attendance Error:', error);
+    return res
+      .status(500)
+      .json({
+        success: false,
+        message: 'Failed to fetch attendance',
+        error: error.message,
+      });
   }
 };
 
@@ -642,6 +726,7 @@ exports.sendNotification = async (req, res) => {
 
     await batch.commit();
 
+    res.set('Cache-Control', 'no-store');
     res.status(201).json({
       success: true,
       message: `Notification sent successfully to ${usersSnapshot.size} users`,
@@ -708,6 +793,7 @@ exports.getUserNotifications = async (req, res) => {
       return bTime - aTime;
     });
 
+    res.set('Cache-Control', 'no-store');
     res.status(200).json({
       success: true,
       message: 'Notifications fetched successfully',
@@ -741,6 +827,7 @@ exports.markNotificationAsRead = async (req, res) => {
       readAt: new Date().toISOString(),
     });
 
+    res.set('Cache-Control', 'no-store');
     res.status(200).json({
       success: true,
       message: 'Notification marked as read',

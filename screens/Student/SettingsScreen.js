@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { AuthContext } from '../../context/AuthContext';
+import { API_CONFIG } from '../../config/config';
+import { getBaseUrlFast, resolveBaseUrl } from '../../utils/network';
 
 export default function SettingsScreen({ navigation }) {
   const { user, logout } = useContext(AuthContext);
@@ -25,7 +27,11 @@ export default function SettingsScreen({ navigation }) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  const API_URL = 'http://192.168.1.7:5000';
+  const getBase = async () => {
+    let base = API_CONFIG.BASE_URL || (await getBaseUrlFast());
+    if (!base) base = await resolveBaseUrl(true);
+    return base;
+  };
 
   // LOGOUT FUNCTION
   const handleLogout = () => {
@@ -72,7 +78,10 @@ export default function SettingsScreen({ navigation }) {
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/change-password`, {
+      const base = await getBase();
+      if (!base) throw new Error('Base URL unresolved');
+      const url = `${base}/api/change-password`;
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -82,9 +91,9 @@ export default function SettingsScreen({ navigation }) {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
-      if (data.success) {
+      if (response.ok && data.success) {
         Alert.alert('Success', 'Password updated successfully!');
         setChangePasswordModal(false);
         setCurrentPassword('');
@@ -94,7 +103,10 @@ export default function SettingsScreen({ navigation }) {
         Alert.alert('Error', data.message || 'Failed to change password');
       }
     } catch (error) {
-      Alert.alert('Error', 'Server error. Try again.');
+      const msg = /Base URL unresolved/i.test(error?.message)
+        ? 'Cannot reach server. Ensure backend running & network shared.'
+        : 'Server error. Try again.';
+      Alert.alert('Error', msg);
     }
   };
 

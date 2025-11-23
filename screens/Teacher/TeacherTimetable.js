@@ -144,7 +144,12 @@ export default function TeacherTimetable() {
     <ScrollView
       style={styles.container}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={['#1E3A8A', '#2563EB']}
+          progressBackgroundColor="#FFFFFF"
+        />
       }
     >
       <Text style={styles.title}>Your Timetable</Text>
