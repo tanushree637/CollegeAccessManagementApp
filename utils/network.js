@@ -37,6 +37,7 @@ const buildCandidates = () => {
     'http://192.168.137.1:5000', // Windows hotspot host IP
     'http://192.168.43.1:5000', // Android hotspot gateway (sometimes host)
     'http://172.20.10.2:5000', // iOS hotspot common client IP
+    'http://192.168.1.4:5000',
     'http://127.0.0.1:5000',
   ]);
 };

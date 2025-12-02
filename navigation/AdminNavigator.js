@@ -19,7 +19,7 @@ export default function AdminNavigator() {
         headerShown: false,
         tabBarActiveTintColor: '#1E3A8A',
         tabBarInactiveTintColor: 'gray',
-        tabBarStyle: { backgroundColor: '#fff', paddingBottom: 5, height: 60 },
+        tabBarStyle: { backgroundColor: '#fff', paddingBottom: 5, height: 100 },
         tabBarIcon: ({ color, size }) => {
           let iconName;
 

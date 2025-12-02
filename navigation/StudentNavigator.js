@@ -16,7 +16,7 @@ const StudentTabs = () => {
         headerShown: false,
         tabBarActiveTintColor: '#2563EB',
         tabBarInactiveTintColor: 'gray',
-        tabBarStyle: { backgroundColor: '#fff', paddingBottom: 5, height: 60 },
+        tabBarStyle: { backgroundColor: '#fff', paddingBottom: 5, height: 100 },
         tabBarIcon: ({ color, size }) => {
           let iconName;
           switch (route.name) {
