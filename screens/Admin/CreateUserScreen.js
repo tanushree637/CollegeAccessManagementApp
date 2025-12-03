@@ -14,6 +14,7 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { API_CONFIG } from '../../config/config';
+import { resolveBaseUrl, fetchWithTimeout } from '../../utils/network';
 import {
   validateUserData,
   formatName,
@@ -39,18 +40,21 @@ export default function CreateUserScreen() {
 
     setLoading(true);
     try {
-      const res = await fetch(
-        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.ADMIN}/create-user`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fullName: formatName(fullName),
-            email: formatEmail(email),
-            role,
-          }),
-        },
-      );
+      let base = API_CONFIG.BASE_URL || (await resolveBaseUrl(false));
+      if (!base) base = await resolveBaseUrl(true);
+      if (!base) throw new Error('Base URL unresolved');
+
+      const url = `${base}${API_CONFIG.ENDPOINTS.ADMIN}/create-user`;
+      const res = await fetchWithTimeout(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: formatName(fullName),
+          email: formatEmail(email),
+          role,
+        }),
+        timeout: 12000,
+      });
 
       const data = await res.json();
       if (data.success) {
@@ -86,11 +90,11 @@ export default function CreateUserScreen() {
         Alert.alert('Error', data.message || 'Something went wrong.');
       }
     } catch (error) {
-      console.error(error);
-      Alert.alert(
-        'Error',
-        'Failed to connect to server. Please check your internet connection.',
-      );
+      console.error('CreateUser error:', error);
+      const msg = /Base URL unresolved/i.test(error?.message)
+        ? 'Cannot reach server. Ensure backend is running and device shares the same network.'
+        : 'Failed to connect to server. Please check your internet connection.';
+      Alert.alert('Error', msg);
     } finally {
       setLoading(false);
     }
@@ -158,7 +162,7 @@ export default function CreateUserScreen() {
               />
               <Picker.Item label="👨‍🏫 Teacher" value="teacher" />
               <Picker.Item label="👨‍🎓 Student" value="student" />
-              <Picker.Item label="🛡️ Security Guard" value="guard" />
+              {/*<Picker.Item label="🛡️ Security Guard" value="guard" />*/}
             </Picker>
           </View>
 

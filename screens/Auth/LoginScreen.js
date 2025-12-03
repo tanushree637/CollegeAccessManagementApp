@@ -19,6 +19,9 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // 👁️ show/hide password state
+  const [showPassword, setShowPassword] = useState(false);
+
   const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert('Error', 'Please enter both email and password.');
@@ -81,6 +84,7 @@ export default function LoginScreen({ navigation }) {
     <View style={styles.container}>
       <Text style={styles.title}>College Access Management</Text>
 
+      {/* Email Input */}
       <View style={styles.inputContainer}>
         <MaterialIcons name="email" size={20} color="#555" />
         <TextInput
@@ -94,40 +98,56 @@ export default function LoginScreen({ navigation }) {
         />
       </View>
 
+      {/* Password Input with Eye Icon */}
       <View style={styles.inputContainer}>
         <MaterialIcons name="lock" size={20} color="#555" />
+
         <TextInput
           placeholder="Password (received via email)"
           style={styles.input}
-          secureTextEntry
+          secureTextEntry={!showPassword}
           value={password}
           onChangeText={setPassword}
           placeholderTextColor="#999"
         />
+
+        <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+          <MaterialIcons
+            name={showPassword ? 'visibility' : 'visibility-off'}
+            size={22}
+            color="#555"
+          />
+        </TouchableOpacity>
       </View>
 
+      {/* Login Button */}
       <TouchableOpacity
         style={styles.button}
         onPress={handleLogin}
         disabled={loading}
       >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Login</Text>
-        )}
+        <View style={{ height: 20 }}>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Login</Text>
+          )}
+        </View>
       </TouchableOpacity>
 
+      {/* Test Connection Button */}
       <TouchableOpacity
         style={[styles.button, { backgroundColor: '#718093', marginTop: 10 }]}
         onPress={handleTestConnection}
         disabled={loading}
       >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Test Connection</Text>
-        )}
+        <View style={{ height: 20 }}>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Test Connection</Text>
+          )}
+        </View>
       </TouchableOpacity>
     </View>
   );

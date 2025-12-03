@@ -323,9 +323,9 @@ export default function TeacherDashboard({ navigation }) {
             )}
           </View>
         </View>
-        <Text style={styles.qrDescription}>
+        {/*<Text style={styles.qrDescription}>
           Students can scan these QR codes to record entry or exit.
-        </Text>
+        </Text>*/}
       </View>
 
       {/* Notifications Section */}

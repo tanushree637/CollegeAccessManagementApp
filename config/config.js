@@ -5,7 +5,7 @@ export const API_CONFIG = {
   // Base URL for API calls in development.
   // Tip: If login keeps spinning, ensure this matches your PC's LAN IP.
   // Set to null for dynamic auto-discovery; network.js will resolve.
-  BASE_URL: null,
+  BASE_URL: 'http://192.168.1.4:5000',
   // If you're strictly on Android emulator and prefer emulator alias, you can switch to:
   // Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://192.168.1.7:5000'
   ENDPOINTS: {

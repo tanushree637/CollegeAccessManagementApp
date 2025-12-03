@@ -80,12 +80,12 @@ export default function SettingsScreen({ navigation }) {
     try {
       const base = await getBase();
       if (!base) throw new Error('Base URL unresolved');
-      const url = `${base}/api/change-password`;
+      const url = `${base}/api/auth/change-password`;
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: user.email,
+          email: user.personalEmail || user.email,
           currentPassword,
           newPassword,
         }),
